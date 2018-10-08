@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26228.9
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "packages", "packages", "{63AB64A3-A453-4663-BDB6-530F2136609D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rebus", "Rebus\Rebus.csproj", "{319215F6-B626-4271-8EDA-E31B876F65C0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rebus.Transports.Showdown.RunAll", "Showdown\Rebus.Transports.Showdown.RunAll\Rebus.Transports.Showdown.RunAll.csproj", "{FC0575E5-CD9E-4F2A-9B01-D2C0BB66B2C9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rebus.Transports.Showdown.Core", "Showdown\Rebus.Transports.Showdown.Core\Rebus.Transports.Showdown.Core.csproj", "{FEA9F7D9-1B00-4535-AC4D-BF3934A7B913}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rebus.Transports.Showdown.SqlServer", "Showdown\Rebus.Transports.Showdown.SqlServer\Rebus.Transports.Showdown.SqlServer.csproj", "{59714F9C-7D9A-4EAC-9D66-4500E0A6B9AE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rebus.SqlServer", "Rebus.SqlServer\Rebus.SqlServer.csproj", "{D6F0FB80-4D00-4D95-B661-984353B3CDA7}"
+	ProjectSection(ProjectDependencies) = postProject
+		{319215F6-B626-4271-8EDA-E31B876F65C0} = {319215F6-B626-4271-8EDA-E31B876F65C0}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{319215F6-B626-4271-8EDA-E31B876F65C0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{319215F6-B626-4271-8EDA-E31B876F65C0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{319215F6-B626-4271-8EDA-E31B876F65C0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{319215F6-B626-4271-8EDA-E31B876F65C0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FC0575E5-CD9E-4F2A-9B01-D2C0BB66B2C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FC0575E5-CD9E-4F2A-9B01-D2C0BB66B2C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FC0575E5-CD9E-4F2A-9B01-D2C0BB66B2C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FC0575E5-CD9E-4F2A-9B01-D2C0BB66B2C9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FEA9F7D9-1B00-4535-AC4D-BF3934A7B913}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEA9F7D9-1B00-4535-AC4D-BF3934A7B913}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEA9F7D9-1B00-4535-AC4D-BF3934A7B913}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEA9F7D9-1B00-4535-AC4D-BF3934A7B913}.Release|Any CPU.Build.0 = Release|Any CPU
+		{59714F9C-7D9A-4EAC-9D66-4500E0A6B9AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59714F9C-7D9A-4EAC-9D66-4500E0A6B9AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59714F9C-7D9A-4EAC-9D66-4500E0A6B9AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59714F9C-7D9A-4EAC-9D66-4500E0A6B9AE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D6F0FB80-4D00-4D95-B661-984353B3CDA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D6F0FB80-4D00-4D95-B661-984353B3CDA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D6F0FB80-4D00-4D95-B661-984353B3CDA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D6F0FB80-4D00-4D95-B661-984353B3CDA7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D3ECF428-CC37-42E4-B40D-B61414D52CE9}
+	EndGlobalSection
+EndGlobal
