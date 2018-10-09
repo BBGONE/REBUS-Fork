@@ -39,6 +39,15 @@ namespace Rebus.Config
         }
 
         /// <summary>
+        /// Sets the bus name, which would otherwise default to "Rebus 1", "Rebus 2", etc. 
+        /// depending on how many instances existed in the current process
+        /// </summary>
+        public void SetBusName(string busName)
+        {
+            _options.OptionalBusName = busName;
+        }
+
+        /// <summary>
         /// Configures the total degree of parallelism allowed. This will be the maximum number of parallel potentially asynchrounous operations that can be active,
         /// regardless of the number of workers
         /// </summary>
@@ -107,17 +116,17 @@ namespace Rebus.Config
                     var receivePipeline = pipeline.ReceivePipeline();
                     var sendPipeline = pipeline.SendPipeline();
 
-                    logger.Info(@"
+                    logger.Info($@"
 ------------------------------------------------------------------------------
 Message pipelines
 ------------------------------------------------------------------------------
 Send pipeline:
-{sendPipeline}
+{Format(sendPipeline, verbose)}
 
 Receive pipeline:
-{receivePipeline}
+{Format(receivePipeline, verbose)}
 ------------------------------------------------------------------------------
-", Format(sendPipeline, verbose), Format(receivePipeline, verbose));
+");
 
 
                     return pipeline;

@@ -13,7 +13,7 @@ namespace TasksCoordinator
     public class WorkersCoordinator : ITaskCoordinatorAdvanced, IWorkersCoordinator
     {
         private const long MAX_TASK_NUM = long.MaxValue;
-        private const int STOP_TIMEOUT = 30000;
+        private const int STOP_TIMEOUT_MSec = 30000;
         private CancellationTokenSource _stopTokenSource;
         private long _taskIdSeq;
         private volatile int _maxWorkersCount;
@@ -26,11 +26,13 @@ namespace TasksCoordinator
         private readonly string _name;
         private Task _stoppingTask;
         private readonly AsyncBottleneck _readBottleNeck;
+        private readonly int _shutdownTimeout;
 
         public WorkersCoordinator(string name, int maxWorkersCount,
               IMessageReaderFactory messageReaderFactory,
               IRebusLoggerFactory rebusLoggerFactory,
-              int maxReadParallelism = 4
+              int maxReadParallelism = 4,
+              int shutdownTimeout = STOP_TIMEOUT_MSec
               )
         {
             this.Log = rebusLoggerFactory.GetLogger<WorkersCoordinator>();
@@ -45,6 +47,7 @@ namespace TasksCoordinator
             this._tasks = new ConcurrentDictionary<long, Task>();
             this._isStarted = 0;
             this._readBottleNeck = new AsyncBottleneck(maxReadParallelism);
+            this._shutdownTimeout = shutdownTimeout;
         }
 
         public bool Start()
@@ -73,7 +76,7 @@ namespace TasksCoordinator
                 var tasks = this._tasks.Select(p => p.Value).ToArray();
                 if (tasks.Length > 0)
                 {
-                    await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(STOP_TIMEOUT)).ConfigureAwait(false);
+                    await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(this._shutdownTimeout)).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException)
@@ -100,7 +103,7 @@ namespace TasksCoordinator
             }
         }
 
-        private int _TryDecrementTasksCanbeStarted()
+        private bool _TryDecrementTasksCanBeStarted()
         {
             int beforeChanged = this._tasksCanBeStarted;
             if (beforeChanged > 0 && Interlocked.CompareExchange(ref this._tasksCanBeStarted, beforeChanged - 1, beforeChanged) != beforeChanged)
@@ -112,7 +115,7 @@ namespace TasksCoordinator
                     beforeChanged = this._tasksCanBeStarted;
                 } while (beforeChanged > 0 && Interlocked.CompareExchange(ref this._tasksCanBeStarted, beforeChanged - 1, beforeChanged) != beforeChanged);
             }
-            return beforeChanged;
+            return beforeChanged > 0;
         }
 
         private void _TryStartNewTask()
@@ -123,11 +126,7 @@ namespace TasksCoordinator
 
             try
             {
-                int beforeChanged = this._TryDecrementTasksCanbeStarted();
-                if (beforeChanged > 0)
-                {
-                    semaphoreOK = true;
-                }
+                semaphoreOK = this._TryDecrementTasksCanBeStarted();
 
                 if (semaphoreOK)
                 {
@@ -244,10 +243,10 @@ namespace TasksCoordinator
         void IDisposable.Dispose()
         {
             (this as IWorkersCoordinator).Stop();
-            var res = this._stoppingTask?.Wait(STOP_TIMEOUT);
+            var res = this._stoppingTask?.Wait(this._shutdownTimeout);
             if (res.HasValue && !res.Value)
             {
-                Log.Warn($"The {_name} worker did not shut down within {STOP_TIMEOUT} milliseconds!");
+                Log.Warn($"The WorkersCoordinator did not shut down within {_shutdownTimeout} milliseconds!");
             }
         }
         #endregion

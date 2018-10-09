@@ -17,14 +17,14 @@ namespace TasksCoordinator
         readonly ITransport _transport;
         readonly IPipelineInvoker _pipelineInvoker;
         readonly RebusBus _owningBus;
-        readonly IASyncBackoffStrategy _backoffStrategy;
+        readonly IBackoffStrategy _backoffStrategy;
         #endregion
 
         public RebusMessageReader(long taskId, 
             ITaskCoordinatorAdvanced tasksCoordinator, 
             ILog log, 
             ITransport transport,
-            IASyncBackoffStrategy backoffStrategy,
+            IBackoffStrategy backoffStrategy,
             IPipelineInvoker pipelineInvoker,
             RebusBus owningBus
             ) :
@@ -62,7 +62,7 @@ namespace TasksCoordinator
                 Log.Warn("An error occurred when attempting to receive the next message: {exception}", exception);
                 if (IsPrimaryReader)
                 {
-                    await _backoffStrategy.WaitError();
+                    await _backoffStrategy.WaitErrorAsync(token);
                 }
                 return null;
             }
@@ -116,14 +116,13 @@ namespace TasksCoordinator
                     context.Dispose();
                     if (isPrimaryReader)
                     {
-                        await _backoffStrategy.WaitNoMessage();
+                        await _backoffStrategy.WaitNoMessageAsync(token);
                     }
 
                     return 0;
                 }
 
                 // Console.WriteLine($"TaskID: {taskId} {IsPrimaryReader} THREAD:{Thread.CurrentThread.ManagedThreadId} TasksCount:{this.Coordinator.TasksCount}");
-
 
                 _backoffStrategy.Reset();
 

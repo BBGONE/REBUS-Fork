@@ -16,6 +16,7 @@ using Rebus.Pipeline.Send;
 using Rebus.Routing;
 using Rebus.Subscriptions;
 using Rebus.Time;
+using Rebus.Topic;
 using Rebus.Transport;
 using Rebus.Workers;
 // ReSharper disable ArgumentsStyleLiteral
@@ -29,8 +30,6 @@ namespace Rebus.Bus
     {
         static int _busIdCounter;
 
-        readonly int _busId = Interlocked.Increment(ref _busIdCounter);
-
         readonly Lazy<IWorkersCoordinator> _workers;
         readonly BusLifetimeEvents _busLifetimeEvents;
         readonly IDataBus _dataBus;
@@ -41,11 +40,13 @@ namespace Rebus.Bus
         readonly ISubscriptionStorage _subscriptionStorage;
         readonly Options _options;
         readonly ILog _log;
+        readonly string _busName;
+        readonly ITopicNameConvention _topicNameConvention;
 
         /// <summary>
         /// Constructs the bus.
         /// </summary>
-        public RebusBus(IWorkersCoordinatorFactory workerFactory, IRouter router, ITransport transport, IPipelineInvoker pipelineInvoker, ISubscriptionStorage subscriptionStorage, Options options, IRebusLoggerFactory rebusLoggerFactory, BusLifetimeEvents busLifetimeEvents, IDataBus dataBus)
+        public RebusBus(IWorkersCoordinatorFactory workerFactory, IRouter router, ITransport transport, IPipelineInvoker pipelineInvoker, ISubscriptionStorage subscriptionStorage, Options options, IRebusLoggerFactory rebusLoggerFactory, BusLifetimeEvents busLifetimeEvents, IDataBus dataBus, ITopicNameConvention topicNameConvention)
         {
             _workerFactory = workerFactory;
             _router = router;
@@ -56,6 +57,11 @@ namespace Rebus.Bus
             _busLifetimeEvents = busLifetimeEvents;
             _dataBus = dataBus;
             _log = rebusLoggerFactory.GetLogger<RebusBus>();
+            _topicNameConvention = topicNameConvention;
+            
+            var defaultBusName = $"Rebus {Interlocked.Increment(ref _busIdCounter)}";
+            
+            _busName = options.OptionalBusName ?? defaultBusName;
             _workers = new Lazy<IWorkersCoordinator>(() => _workerFactory.CreateWorkerCoordinator("RebusBus WorkersCoordinator", 0), true);
         }
 
@@ -64,15 +70,13 @@ namespace Rebus.Bus
         /// </summary>
         public void Start(int numberOfWorkers)
         {
-            _log.Info("Starting bus {busId}", _busId);
-
             _busLifetimeEvents.RaiseBusStarting();
 
             SetNumberOfWorkers(numberOfWorkers);
 
             _busLifetimeEvents.RaiseBusStarted();
 
-            _log.Info("Started");
+            _log.Info("Bus {busName} started", _busName);
         }
 
         /// <summary>
@@ -195,7 +199,7 @@ namespace Rebus.Bus
         /// </summary>
         public Task Subscribe(Type eventType)
         {
-            var topic = eventType.GetSimpleAssemblyQualifiedName();
+            var topic = _topicNameConvention.GetTopic(eventType);
 
             return InnerSubscribe(topic);
         }
@@ -213,7 +217,7 @@ namespace Rebus.Bus
         /// </summary>
         public Task Unsubscribe(Type eventType)
         {
-            var topic = eventType.GetSimpleAssemblyQualifiedName();
+            var topic = _topicNameConvention.GetTopic(eventType);
 
             return InnerUnsubscribe(topic);
         }
@@ -236,7 +240,7 @@ namespace Rebus.Bus
             if (eventMessage == null) throw new ArgumentNullException(nameof(eventMessage));
 
             var messageType = eventMessage.GetType();
-            var topic = messageType.GetSimpleAssemblyQualifiedName();
+            var topic = _topicNameConvention.GetTopic(messageType);
 
             return InnerPublish(topic, eventMessage, optionalHeaders);
         }
@@ -406,7 +410,7 @@ namespace Rebus.Bus
             }
             else
             {
-                using (var context = new TransactionContext())
+                using (var context = new TransactionContextWithOwningBus(this))
                 {
                     await SendUsingTransactionContext(destinationAddresses, logicalMessage, context);
                     await context.Complete();
@@ -427,7 +431,7 @@ namespace Rebus.Bus
 
             if (transactionContext == null)
             {
-                using (var context = new TransactionContext())
+                using (var context = new TransactionContextWithOwningBus(this))
                 {
                     await _transport.Send(destinationAddress, transportMessage, context);
                     await context.Complete();
@@ -472,6 +476,8 @@ namespace Rebus.Bus
                 _disposed = true;
 
                 _busLifetimeEvents.RaiseBusDisposed();
+
+                _log.Info("Bus {busName} stopped", _busName);
             }
         }
 
@@ -501,7 +507,6 @@ namespace Rebus.Bus
             return _workers.Value.MaxWorkersCount;
         }
 
-
         ITransactionContext GetCurrentTransactionContext(bool mustBelongToThisBus)
         {
             var transactionContext = AmbientTransactionContext.Current;
@@ -512,12 +517,13 @@ namespace Rebus.Bus
             // if the context is not required to belong to this bus instance, just return it
             if (!mustBelongToThisBus) return transactionContext;
 
-            // if there's a context but there's no OwningBus, just return the context (the user created it)
-            object owningBus;
-            if (!transactionContext.Items.TryGetValue("OwningBus", out owningBus))
+            // if there's a context, but it is not one with an owning bus, just return the context (the user or someone else created it)
+            if (!(transactionContext is ITransactionContextWithOwningBus transactionContextWithOwningBus))
             {
                 return transactionContext;
             }
+
+            var owningBus = transactionContextWithOwningBus.OwningBus;
 
             // if there is an OwningBus and it is this
             return Equals(owningBus, this) 
@@ -527,10 +533,8 @@ namespace Rebus.Bus
 
         /// <summary>
         /// Gets a label for this bus instance - e.g. "RebusBus 2" if this is the 2nd instance created, ever, in the current process
+        /// (or the name used when configuring it, if the name has been customized)
         /// </summary>
-        public override string ToString()
-        {
-            return $"RebusBus {_busId}";
-        }
+        public override string ToString() => $"RebusBus {_busName}";
     }
 }

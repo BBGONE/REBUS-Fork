@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Rebus.Activation;
-using Rebus.Extensions;
+using Rebus.Handlers;
 using Rebus.Messages;
 using Rebus.Transport;
 // ReSharper disable UnusedMethodReturnValue.Local
@@ -35,36 +35,45 @@ namespace Rebus.Pipeline.Receive
         {
             var transactionContext = context.Load<ITransactionContext>();
             var message = context.Load<Message>();
-            var messageId = message.Headers.GetValue(Headers.MessageId);
             var body = message.Body;
             var messageType = body.GetType();
             var methodToInvoke = _dispatchMethods
                 .GetOrAdd(messageType, type => GetDispatchMethod(messageType));
 
-            var handlerInvokers = await ((Task<HandlerInvokers>)methodToInvoke.Invoke(this, new[] { messageId, body, transactionContext, message }));
+            var handlerInvokers = await ((Task<HandlerInvokers>)methodToInvoke.Invoke(this, new[] { body, transactionContext, message }));
 
             context.Save(handlerInvokers);
 
             await next();
         }
 
-        async Task<HandlerInvokers> GetHandlerInvokers<TMessage>(string messageId, TMessage message, ITransactionContext transactionContext, Message logicalMessage)
+        async Task<HandlerInvokers> GetHandlerInvokers<TMessage>(TMessage message, ITransactionContext transactionContext, Message logicalMessage)
         {
             var handlers = await _handlerActivator.GetHandlers(message, transactionContext);
 
             var listOfHandlerInvokers = handlers
-                .Select(handler => new HandlerInvoker<TMessage>(() => handler.Handle(message), handler, transactionContext))
-                .Cast<HandlerInvoker>()
+                .Select(handler => CreateHandlerInvoker(handler, message, transactionContext, logicalMessage))
                 .ToList();
 
             return new HandlerInvokers(logicalMessage, listOfHandlerInvokers);
         }
 
+        /// <summary>
+        /// Creates instance of HandlerInvoker
+        /// </summary>
+        protected virtual HandlerInvoker CreateHandlerInvoker<TMessage>(IHandleMessages<TMessage> handler, TMessage message, ITransactionContext transactionContext, Message logicalMessage)
+        {
+            return new HandlerInvoker<TMessage>(() => handler.Handle(message), handler, transactionContext);
+        }
+
         MethodInfo GetDispatchMethod(Type messageType)
         {
-            return GetType()
-                .GetMethod(nameof(GetHandlerInvokers), BindingFlags.NonPublic | BindingFlags.Instance)
-                .MakeGenericMethod(messageType);
+            const string methodName = nameof(GetHandlerInvokers);
+            
+            var genericDispatchMethod = GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new ArgumentException($"Could not find the {methodName} method?!");
+
+            return genericDispatchMethod.MakeGenericMethod(messageType);
         }
     }
 }

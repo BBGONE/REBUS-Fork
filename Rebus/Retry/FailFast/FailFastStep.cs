@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Rebus.Bus;
 using Rebus.Exceptions;
-using Rebus.Extensions;
 using Rebus.Messages;
 using Rebus.Pipeline;
-using Rebus.Transport;
-
 // ReSharper disable ArgumentsStyleLiteral
 
 namespace Rebus.Retry.FailFast
@@ -50,7 +46,7 @@ This allows the SimpleRetryStrategyStep to move it to the error queue.")]
                 var messageId = transportMessage.GetMessageId();
                 if (_failFastChecker.ShouldFailFast(messageId, exception))
                 {
-                    _errorTracker.RegisterError(messageId, exception, final: true);
+                    _errorTracker.MarkAsFinal(messageId);
                 }
                 throw;
             }

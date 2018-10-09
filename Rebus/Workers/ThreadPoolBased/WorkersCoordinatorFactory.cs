@@ -17,22 +17,20 @@ namespace Rebus.Workers.ThreadPoolBased
     {
         readonly ITransport _transport;
         readonly IRebusLoggerFactory _rebusLoggerFactory;
-        readonly IPipeline _pipeline;
         readonly IPipelineInvoker _pipelineInvoker;
         readonly Options _options;
         readonly Func<RebusBus> _busGetter;
-        readonly IASyncBackoffStrategy _backoffStrategy;
+        readonly IBackoffStrategy _backoffStrategy;
         readonly ParallelOperationsManager _parallelOperationsManager;
         readonly ILog _log;
 
         /// <summary>
         /// Creates the worker factory
         /// </summary>
-        public WorkersCoordinatorFactory(ITransport transport, IRebusLoggerFactory rebusLoggerFactory, IPipeline pipeline, IPipelineInvoker pipelineInvoker, Options options, Func<RebusBus> busGetter, BusLifetimeEvents busLifetimeEvents, IASyncBackoffStrategy backoffStrategy)
+        public WorkersCoordinatorFactory(ITransport transport, IRebusLoggerFactory rebusLoggerFactory, IPipelineInvoker pipelineInvoker, Options options, Func<RebusBus> busGetter, BusLifetimeEvents busLifetimeEvents, IBackoffStrategy backoffStrategy)
         {
             if (transport == null) throw new ArgumentNullException(nameof(transport));
             if (rebusLoggerFactory == null) throw new ArgumentNullException(nameof(rebusLoggerFactory));
-            if (pipeline == null) throw new ArgumentNullException(nameof(pipeline));
             if (pipelineInvoker == null) throw new ArgumentNullException(nameof(pipelineInvoker));
             if (options == null) throw new ArgumentNullException(nameof(options));
             if (busGetter == null) throw new ArgumentNullException(nameof(busGetter));
@@ -40,7 +38,6 @@ namespace Rebus.Workers.ThreadPoolBased
             if (backoffStrategy == null) throw new ArgumentNullException(nameof(backoffStrategy));
             _transport = transport;
             _rebusLoggerFactory = rebusLoggerFactory;
-            _pipeline = pipeline;
             _pipelineInvoker = pipelineInvoker;
             _options = options;
             _busGetter = busGetter;
@@ -69,14 +66,16 @@ namespace Rebus.Workers.ThreadPoolBased
             var owningBus = _busGetter();
             var readerFactory = new MessageReaderFactory(_rebusLoggerFactory, owningBus, 
                 _transport, _pipelineInvoker, _backoffStrategy);
-            var worker = new WorkersCoordinator(name: name, 
+            var coordinator = new WorkersCoordinator(name: name, 
                 maxWorkersCount: desiredNumberOfWorkers,
                 messageReaderFactory: readerFactory, 
                 rebusLoggerFactory: _rebusLoggerFactory, 
-                maxReadParallelism: 4
+                // Patch: Most probably it should be a configured value but in most cases the 4 works for me
+                maxReadParallelism: 4,
+                shutdownTimeout: (int)Convert.ChangeType(this._options.WorkerShutdownTimeout.TotalMilliseconds, typeof(int))
                 );
-            worker.Start();
-            return worker;
+            coordinator.Start();
+            return coordinator;
         }
 
     }

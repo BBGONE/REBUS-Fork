@@ -1,26 +1,29 @@
-﻿using System.Data.SqlClient;
+﻿using Rebus.Activation;
 using Rebus.Config;
 using Rebus.Transports.Showdown.Core;
+using System;
+using System.Data.SqlClient;
 
 namespace Rebus.Transports.Showdown.SqlServer
 {
     public class Program
     {
         const string QueueName = "test_showdown";
-        const string SqlServerConnectionString = "Data Source=.;Initial Catalog=rebus2_test;Integrated Security=True";
-        const int TableNotFound = 208;
+        const string SqlServerConnectionString = "Data Source=.;Initial Catalog=rebus2_test;Integrated Security=True;Connection Timeout=5";
 
         public static void Main()
         {
-            using (var runner = new ShowdownRunner())
+            Action<IHandlerActivator> configureAdapter = (adapter) => {
+                Configure.With(adapter)
+                .Logging(l => l.None())
+                .Transport(t => t.UseSqlServer(SqlServerConnectionString, QueueName))
+                .Start();
+            };
+
+            PurgeInputQueue();
+
+            using (var runner = new ShowdownRunner(configure: configureAdapter, isLongRun: false))
             {
-                PurgeInputQueue();
-
-                Configure.With(runner.Adapter)
-                    .Logging(l => l.None())
-                    .Transport(t => t.UseSqlServer(SqlServerConnectionString, QueueName))
-                    .Start();
-
                 runner.Run(typeof(Program).Namespace).Wait();
             }
         }
@@ -31,16 +34,10 @@ namespace Rebus.Transports.Showdown.SqlServer
             {
                 connection.Open();
 
-                try
+                using (var command = connection.CreateCommand())
                 {
-                    using (var command = connection.CreateCommand())
-                    {
-                        command.CommandText = $"DROP TABLE [{QueueName}]";
-                        command.ExecuteNonQuery();
-                    }
-                }
-                catch (SqlException sqlException) // when (sqlException.Number == TableNotFound)
-                {
+                    command.CommandText = $"IF (OBJECT_ID('[{QueueName}]', 'U') IS NOT NULL) TRUNCATE TABLE [{QueueName}]";
+                    command.ExecuteNonQuery();
                 }
             }
         }

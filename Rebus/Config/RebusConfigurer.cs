@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Rebus.Activation;
@@ -30,6 +32,9 @@ using Rebus.Transport;
 using Rebus.Workers;
 using Rebus.Workers.ThreadPoolBased;
 using Rebus.Retry.FailFast;
+using Rebus.Topic;
+
+// ReSharper disable EmptyGeneralCatchClause
 
 namespace Rebus.Config
 {
@@ -144,13 +149,13 @@ namespace Rebus.Config
         /// </summary>
         public IBus Start()
         {
-            #if NET45
+#if HAS_CONFIGURATION_MANAGER
             // force the silly configuration subsystem to initialize itself as a service to users, thus
             // avoiding the oft-encountered stupid Entity Framework initialization exception
             // complaining that something in Rebus' transaction context is not serializable
             System.Configuration.ConfigurationManager.GetSection("system.xml/xmlReader");
             // if you want to know more about this issue, check this out: https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/mitigation-deserialization-of-objects-across-app-domains
-            #endif
+#endif
 
             VerifyRequirements();
 
@@ -187,7 +192,7 @@ namespace Rebus.Config
                 return new DefaultPipelineInvokerNew(pipeline);
             });
 
-            PossiblyRegisterDefault<IASyncBackoffStrategy>(c =>
+            PossiblyRegisterDefault<IBackoffStrategy>(c =>
             {
                 var backoffTimes = new[]
                 {
@@ -198,27 +203,27 @@ namespace Rebus.Config
                     Enumerable.Repeat(TimeSpan.FromMilliseconds(250), 1)
                 };
 
-                return new DefaultASyncBackoffStrategy(backoffTimes.SelectMany(e => e));
+                return new DefaultBackoffStrategy(backoffTimes.SelectMany(e => e));
             });
 
             PossiblyRegisterDefault<IWorkersCoordinatorFactory>(c =>
             {
                 var transport = c.Get<ITransport>();
                 var rebusLoggerFactory = c.Get<IRebusLoggerFactory>();
-                var pipeline = c.Get<IPipeline>();
                 var pipelineInvoker = c.Get<IPipelineInvoker>();
                 var options = c.Get<Options>();
                 var busLifetimeEvents = c.Get<BusLifetimeEvents>();
-                var backoffStrategy = c.Get<IASyncBackoffStrategy>();
-                return new WorkersCoordinatorFactory(transport, rebusLoggerFactory, pipeline, pipelineInvoker, options, c.Get<RebusBus>, busLifetimeEvents, backoffStrategy);
+                var backoffStrategy = c.Get<IBackoffStrategy>();
+                return new WorkersCoordinatorFactory(transport, rebusLoggerFactory, pipelineInvoker, options, c.Get<RebusBus>, busLifetimeEvents, backoffStrategy);
             });
 
             PossiblyRegisterDefault<IErrorTracker>(c =>
             {
+                var transport = c.Get<ITransport>();
                 var settings = c.Get<SimpleRetryStrategySettings>();
                 var rebusLoggerFactory = c.Get<IRebusLoggerFactory>();
                 var asyncTaskFactory = c.Get<IAsyncTaskFactory>();
-                return new InMemErrorTracker(settings.MaxDeliveryAttempts, rebusLoggerFactory, asyncTaskFactory);
+                return new InMemErrorTracker(settings, rebusLoggerFactory, asyncTaskFactory, transport);
             });
 
             PossiblyRegisterDefault<IErrorHandler>(c =>
@@ -282,6 +287,8 @@ namespace Rebus.Config
 
             PossiblyRegisterDefault<IDataBus>(c => new DisabledDataBus());
 
+            PossiblyRegisterDefault<ITopicNameConvention>(c => new DefaultTopicNameConvention());
+
             // configuration hack - keep these two bad boys around to have them available at the last moment before returning the built bus instance...
             Action startAction = null;
 
@@ -294,36 +301,52 @@ namespace Rebus.Config
                 _options,
                 c.Get<IRebusLoggerFactory>(),
                 c.Get<BusLifetimeEvents>(),
-                c.Get<IDataBus>()));
+                c.Get<IDataBus>(),
+                c.Get<ITopicNameConvention>()));
+
+            // since an error during resolution does not give access to disposable instances, we need to do this
+            var disposableInstancesTrackedFromInitialResolution = new ConcurrentStack<IDisposable>();
 
             PossiblyRegisterDefault<IBus>(c =>
             {
-                var bus = c.Get<RebusBus>();
-                var cancellationTokenSource = c.Get<CancellationTokenSource>();
-
-                bus.Disposed += () =>
+                try
                 {
-                    cancellationTokenSource.Cancel();
+                    var bus = c.Get<RebusBus>();
+                    var cancellationTokenSource = c.Get<CancellationTokenSource>();
 
-                    var disposableInstances = c.TrackedInstances.OfType<IDisposable>().Reverse();
-
-                    foreach (var disposableInstance in disposableInstances)
+                    bus.Disposed += () =>
                     {
-                        disposableInstance.Dispose();
+                        cancellationTokenSource.Cancel();
+
+                        var disposableInstances = c.TrackedInstances.OfType<IDisposable>().Reverse();
+
+                        foreach (var disposableInstance in disposableInstances)
+                        {
+                            disposableInstance.Dispose();
+                        }
+                    };
+
+                    var initializableInstances = c.TrackedInstances.OfType<IInitializable>();
+
+                    foreach (var initializableInstance in initializableInstances)
+                    {
+                        initializableInstance.Initialize();
                     }
-                };
 
-                var initializableInstances = c.TrackedInstances.OfType<IInitializable>();
+                    // and then we set the startAction
+                    startAction = () => bus.Start(_options.NumberOfWorkers);
 
-                foreach (var initializableInstance in initializableInstances)
-                {
-                    initializableInstance.Initialize();
+                    return bus;
                 }
-
-                // and then we set the startAction
-                startAction = () => bus.Start(_options.NumberOfWorkers);
-
-                return bus;
+                catch
+                {
+                    // stash'em here quick!
+                    foreach (var disposable in c.TrackedInstances.OfType<IDisposable>())
+                    {
+                        disposableInstancesTrackedFromInitialResolution.Push(disposable);
+                    }
+                    throw;
+                }
             });
 
             _injectionist.Decorate<IHandlerActivator>(c =>
@@ -333,7 +356,7 @@ namespace Rebus.Config
                 var internalHandlersContributor = new InternalHandlersContributor(handlerActivator, subscriptionStorage);
                 return internalHandlersContributor;
             });
-            
+
             _injectionist.Decorate<ISerializer>(c =>
             {
                 var serializer = c.Get<ISerializer>();
@@ -342,22 +365,37 @@ namespace Rebus.Config
                 return unzippingSerializerDecorator;
             });
 
-            var busResolutionResult = _injectionist.Get<IBus>();
-            var busInstance = busResolutionResult.Instance;
+            try
+            {
+                var busResolutionResult = _injectionist.Get<IBus>();
+                var busInstance = busResolutionResult.Instance;
 
-            // if there is a container adapter among the tracked instances, hand it the bus instance
-            var containerAdapter = busResolutionResult.TrackedInstances
-                .OfType<IContainerAdapter>()
-                .FirstOrDefault();
+                // if there is a container adapter among the tracked instances, hand it the bus instance
+                var containerAdapter = busResolutionResult.TrackedInstances
+                    .OfType<IContainerAdapter>()
+                    .FirstOrDefault();
 
-            containerAdapter?.SetBus(busInstance);
+                containerAdapter?.SetBus(busInstance);
 
-            // and NOW we are ready to start the bus if there is a startAction
-            startAction?.Invoke();
+                // and NOW we are ready to start the bus if there is a startAction
+                startAction?.Invoke();
 
-            _hasBeenStarted = true;
+                _hasBeenStarted = true;
 
-            return busInstance;
+                return busInstance;
+            }
+            catch
+            {
+                while (disposableInstancesTrackedFromInitialResolution.TryPop(out var disposable))
+                {
+                    try
+                    {
+                        disposable.Dispose();
+                    }
+                    catch { } //< disposables must never throw, but sometimes they do
+                }
+                throw;
+            }
         }
 
         void VerifyRequirements()

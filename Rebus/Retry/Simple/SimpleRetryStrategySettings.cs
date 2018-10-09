@@ -19,10 +19,21 @@ namespace Rebus.Retry.Simple
         public const int DefaultNumberOfDeliveryAttempts = 5;
 
         /// <summary>
+        /// Default age in minutes of an in-mem error tracking, which will be used unless <see cref="ErrorTrackingMaxAgeMinutes"/> is set to something else.
+        /// </summary>
+        public const int DefaultErrorTrackingMaxAgeMinutes = 10;
+
+        /// <summary>
         /// Creates the settings with the given error queue address and number of delivery attempts, defaulting to <see cref="DefaultErrorQueueName"/> and <see cref="DefaultNumberOfDeliveryAttempts"/> 
         /// as the error queue address and number of delivery attempts, respectively
         /// </summary>
-        public SimpleRetryStrategySettings(string errorQueueAddress = DefaultErrorQueueName, int maxDeliveryAttempts = DefaultNumberOfDeliveryAttempts, bool secondLevelRetriesEnabled = false, int errorDetailsHeaderMaxLength = int.MaxValue)
+        public SimpleRetryStrategySettings(
+            string errorQueueAddress = DefaultErrorQueueName,
+            int maxDeliveryAttempts = DefaultNumberOfDeliveryAttempts,
+            bool secondLevelRetriesEnabled = false,
+            int errorDetailsHeaderMaxLength = int.MaxValue,
+            int errorTrackingMaxAgeMinutes = DefaultErrorTrackingMaxAgeMinutes
+        )
         {
             if (errorDetailsHeaderMaxLength < 0)
             {
@@ -32,10 +43,16 @@ namespace Rebus.Retry.Simple
             {
                 throw new ArgumentOutOfRangeException(nameof(maxDeliveryAttempts), maxDeliveryAttempts, "Please specify a non-negative number as the number of delivery attempts");
             }
+            if (errorTrackingMaxAgeMinutes <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(errorTrackingMaxAgeMinutes), errorTrackingMaxAgeMinutes, 
+                    "Please specify the max age in minutes of an in-mem error tracking before it gets purged (must be >= 1)");
+            }
             ErrorQueueAddress = errorQueueAddress ?? throw new ArgumentException("Error queue address cannot be NULL");
             MaxDeliveryAttempts = maxDeliveryAttempts;
             SecondLevelRetriesEnabled = secondLevelRetriesEnabled;
             ErrorDetailsHeaderMaxLength = errorDetailsHeaderMaxLength;
+            ErrorTrackingMaxAgeMinutes = errorTrackingMaxAgeMinutes;
         }
 
         /// <summary>
@@ -58,5 +75,12 @@ namespace Rebus.Retry.Simple
         /// be necessary to truncate the value of this header.
         /// </summary>
         public int ErrorDetailsHeaderMaxLength { get; set; }
+
+        /// <summary>
+        /// Configures the maximum age in minutes of an in-mem error tracking.
+        /// This is a safety precaution, because the in-mem error tracker can end up tracking messages that it never sees
+        /// again if multiple bus instances are consuming messages from the same queue.
+        /// </summary>
+        public int ErrorTrackingMaxAgeMinutes { get; set; }
     }
 }

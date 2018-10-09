@@ -22,22 +22,16 @@ namespace Rebus.Sagas.Idempotent
         /// <summary>
         /// Gets the ID of the incoming message
         /// </summary>
-        public string MessageId { get; private set; }
+        public string MessageId { get; }
 
         /// <summary>
         /// Gets all the outgoing messages to be sent as a consequence of handling the message with the ID <see cref="MessageId"/>
         /// </summary>
-        public IEnumerable<OutgoingMessage> MessagesToSend
-        {
-            get { return _messagesToSend; }
-        }
+        public IEnumerable<OutgoingMessage> MessagesToSend => _messagesToSend;
 
         /// <summary>
         /// Adds another <see cref="OutgoingMessage"/> as a side-effect of handling the message with the ID <see cref="MessageId"/>
         /// </summary>
-        public void Add(OutgoingMessage outgoingMessage)
-        {
-            _messagesToSend.Add(outgoingMessage);
-        }
+        public void Add(OutgoingMessage outgoingMessage) => _messagesToSend.Add(outgoingMessage);
     }
 }

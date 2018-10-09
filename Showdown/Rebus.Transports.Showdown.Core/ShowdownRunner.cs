@@ -18,13 +18,18 @@ namespace Rebus.Transports.Showdown.Core
         const int MessageCount = 1000;
         const int MaxNumberOfWorkers = 20;
         private static readonly Task NOOP = Task.FromResult(0);
+        // For long running tasks - uses its own thread pool to schedule tasks
         private WorkStealingTaskScheduler _customTaskScheduler;
-        private readonly bool IS_LONG_RUN = false;
+        // changing it changes the work type to test it on
+        private readonly bool IS_LONG_RUN;
         readonly BuiltinHandlerActivator _adapter = new BuiltinHandlerActivator();
 
-        public BuiltinHandlerActivator Adapter => _adapter;
+        public ShowdownRunner(Action<IHandlerActivator> configure, bool isLongRun) {
+            this.IS_LONG_RUN = isLongRun;
+            configure(_adapter);
+        }
 
-        #region TASK HANDLER
+        #region TASK HANDLERS - DIFFERENT TYPES
         private void CPU_TASK(TestMessage message, int cnt = 5000)
         {
             for (int i = 0; i < cnt; ++i)
@@ -42,7 +47,7 @@ Puttin' on the Ritz {cnt}");
             // IO BOUND ASYNCH TASK - used as is
             await Task.Delay(50);
             // BUT WRAP the LONG SYNCHRONOUS TASK inside the Task which is scheduled on the custom thread pool (to save threadpool threads)
-            await Task.Factory.StartNew(async () => {
+            await Task.Factory.StartNew(() => {
                 CPU_TASK(message, 100000);
             }, token, TaskCreationOptions.DenyChildAttach, _customTaskScheduler?? TaskScheduler.Default);
         }

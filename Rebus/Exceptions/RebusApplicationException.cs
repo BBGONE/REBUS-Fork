@@ -1,16 +1,12 @@
 ﻿using System;
-#if NET45
 using System.Runtime.Serialization;
-#endif
 
 namespace Rebus.Exceptions
 {
     /// <summary>
     /// Generic application exception to use when something bad happens that is pretty unexpected and should be taken seriously
     /// </summary>
-#if NET45
     [Serializable]
-#endif
     public class RebusApplicationException : Exception
     {
         /// <summary>
@@ -29,7 +25,6 @@ namespace Rebus.Exceptions
         {
         }
 
-#if NET45
         /// <summary>
         /// Happy cross-domain serialization!
         /// </summary>
@@ -37,6 +32,5 @@ namespace Rebus.Exceptions
             :base(info, context)
         {
         }
-#endif
     }
 }

@@ -13,13 +13,13 @@ namespace TasksCoordinator
         readonly RebusBus _owningBus;
         readonly ITransport _transport;
         readonly IPipelineInvoker _pipelineInvoker;
-        readonly IASyncBackoffStrategy _backoffStrategy;
+        readonly IBackoffStrategy _backoffStrategy;
 
         public MessageReaderFactory(IRebusLoggerFactory rebusLoggerFactory,
             RebusBus owningBus,
             ITransport transport,
             IPipelineInvoker pipelineInvoker,
-            IASyncBackoffStrategy backoffStrategy)
+            IBackoffStrategy backoffStrategy)
         {
             this._log = rebusLoggerFactory.GetLogger<RebusMessageReader>();
             _transport = transport;
