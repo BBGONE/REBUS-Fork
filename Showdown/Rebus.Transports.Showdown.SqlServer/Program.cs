@@ -27,7 +27,7 @@ namespace Rebus.Transports.Showdown.SqlServer
 
             PurgeInputQueue();
 
-            using (var runner = new ShowdownRunner(configure: configureAdapter, isLongRun: false, MaxNumberOfWorkers: 20))
+            using (var runner = new ShowdownRunner(configure: configureAdapter, isLongRun: false, MaxNumberOfWorkers: 10))
             {
                 runner.Run(typeof(Program).Namespace).Wait();
             }
@@ -41,7 +41,7 @@ namespace Rebus.Transports.Showdown.SqlServer
 
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = $"IF (OBJECT_ID('[{QueueName}]', 'U') IS NOT NULL) TRUNCATE TABLE [{QueueName}]";
+                    command.CommandText = $"IF (OBJECT_ID('[{QueueName}]', 'U') IS NOT NULL) DROP TABLE [{QueueName}]";
                     command.ExecuteNonQuery();
                 }
             }
