@@ -48,12 +48,11 @@ namespace Rebus.Config
         }
 
         /// <summary>
-        /// Configures the total degree of parallelism allowed. This will be the maximum number of parallel potentially asynchrounous operations that can be active,
-        /// regardless of the number of workers
+        /// Configures the maximum parallelism of reading queue allowed.
         /// </summary>
-        public void SetMaxParallelism(int maxParallelism)
+        public void SetMaxReadParallelism(int maxReadParallelism)
         {
-            _options.MaxParallelism = maxParallelism;
+            _options.MaxReadParallelism = maxReadParallelism;
         }
 
         /// <summary>

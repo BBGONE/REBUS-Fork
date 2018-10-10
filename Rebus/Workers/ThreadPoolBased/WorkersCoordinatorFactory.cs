@@ -21,7 +21,6 @@ namespace Rebus.Workers.ThreadPoolBased
         readonly Options _options;
         readonly Func<RebusBus> _busGetter;
         readonly IBackoffStrategy _backoffStrategy;
-        readonly ParallelOperationsManager _parallelOperationsManager;
         readonly ILog _log;
 
         /// <summary>
@@ -42,12 +41,11 @@ namespace Rebus.Workers.ThreadPoolBased
             _options = options;
             _busGetter = busGetter;
             _backoffStrategy = backoffStrategy;
-            _parallelOperationsManager = new ParallelOperationsManager(options.MaxParallelism);
             _log = _rebusLoggerFactory.GetLogger<WorkersCoordinatorFactory>();
 
-            if (_options.MaxParallelism < 1)
+            if (_options.MaxReadParallelism < 1)
             {
-                throw new ArgumentException($"Max parallelism is {_options.MaxParallelism} which is an invalid value");
+                throw new ArgumentException($"Max read parallelism is {_options.MaxReadParallelism} which is an invalid value");
             }
 
             if (options.WorkerShutdownTimeout < TimeSpan.Zero)
@@ -70,8 +68,7 @@ namespace Rebus.Workers.ThreadPoolBased
                 maxWorkersCount: desiredNumberOfWorkers,
                 messageReaderFactory: readerFactory, 
                 rebusLoggerFactory: _rebusLoggerFactory, 
-                // Patch: Most probably it should be a configured value but in most cases the 4 works for me
-                maxReadParallelism: 4,
+                maxReadParallelism: this._options.MaxReadParallelism,
                 shutdownTimeout: (int)Convert.ChangeType(this._options.WorkerShutdownTimeout.TotalMilliseconds, typeof(int))
                 );
             coordinator.Start();

@@ -16,7 +16,7 @@ namespace Rebus.Transports.Showdown.Core
     public class ShowdownRunner : IDisposable
     {
         const int MessageCount = 1000;
-        const int MaxNumberOfWorkers = 20;
+        readonly int MaxNumberOfWorkers;
         private static readonly Task NOOP = Task.FromResult(0);
         // For long running tasks - uses its own thread pool to schedule tasks
         private WorkStealingTaskScheduler _customTaskScheduler;
@@ -24,8 +24,9 @@ namespace Rebus.Transports.Showdown.Core
         private readonly bool IS_LONG_RUN;
         readonly BuiltinHandlerActivator _adapter = new BuiltinHandlerActivator();
 
-        public ShowdownRunner(Action<IHandlerActivator> configure, bool isLongRun) {
+        public ShowdownRunner(Action<IHandlerActivator> configure, bool isLongRun = false, int MaxNumberOfWorkers = 10) {
             this.IS_LONG_RUN = isLongRun;
+            this.MaxNumberOfWorkers = MaxNumberOfWorkers;
             configure(_adapter);
         }
 

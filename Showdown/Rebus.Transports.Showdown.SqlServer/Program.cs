@@ -17,12 +17,17 @@ namespace Rebus.Transports.Showdown.SqlServer
                 Configure.With(adapter)
                 .Logging(l => l.None())
                 .Transport(t => t.UseSqlServer(SqlServerConnectionString, QueueName))
+                .Options(o =>
+                 {
+                     o.SetNumberOfWorkers(0);
+                     o.SetMaxReadParallelism(4);
+                 })
                 .Start();
             };
 
             PurgeInputQueue();
 
-            using (var runner = new ShowdownRunner(configure: configureAdapter, isLongRun: false))
+            using (var runner = new ShowdownRunner(configure: configureAdapter, isLongRun: false, MaxNumberOfWorkers: 20))
             {
                 runner.Run(typeof(Program).Namespace).Wait();
             }
