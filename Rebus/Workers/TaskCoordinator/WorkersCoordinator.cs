@@ -6,9 +6,9 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using TasksCoordinator.Interface;
+using Rebus.TasksCoordinator.Interface;
 
-namespace TasksCoordinator
+namespace Rebus.TasksCoordinator
 {
     public class WorkersCoordinator : ITaskCoordinatorAdvanced, IWorkersCoordinator
     {

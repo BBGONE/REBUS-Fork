@@ -2,7 +2,7 @@
 using Rebus.Config;
 using Rebus.Logging;
 using Rebus.Pipeline;
-using TasksCoordinator;
+using Rebus.TasksCoordinator;
 using Rebus.Threading;
 using Rebus.Transport;
 using System;

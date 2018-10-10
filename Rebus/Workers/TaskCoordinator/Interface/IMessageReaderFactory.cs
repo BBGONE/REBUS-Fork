@@ -1,4 +1,4 @@
-﻿namespace TasksCoordinator.Interface
+﻿namespace Rebus.TasksCoordinator.Interface
 {
     public interface IMessageReaderFactory
     {

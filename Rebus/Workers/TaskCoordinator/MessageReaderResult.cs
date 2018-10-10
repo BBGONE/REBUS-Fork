@@ -1,4 +1,4 @@
-﻿namespace TasksCoordinator
+﻿namespace Rebus.TasksCoordinator
 {
     public struct MessageReaderResult
     {

@@ -2,9 +2,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using TasksCoordinator.Interface;
+using Rebus.TasksCoordinator.Interface;
 
-namespace TasksCoordinator
+namespace Rebus.TasksCoordinator
 {
     public abstract class MessageReader<TMessage, TState> : IMessageReader
         where TMessage:class

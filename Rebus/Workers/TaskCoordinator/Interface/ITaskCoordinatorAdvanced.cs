@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace TasksCoordinator.Interface
+namespace Rebus.TasksCoordinator.Interface
 {
     public interface ITaskCoordinatorAdvanced : ITaskCoordinator
     {

@@ -2,14 +2,14 @@
 using Rebus.Logging;
 using Rebus.Messages;
 using Rebus.Pipeline;
-using TasksCoordinator.Interface;
+using Rebus.TasksCoordinator.Interface;
 using Rebus.Transport;
 using Rebus.Workers.ThreadPoolBased;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace TasksCoordinator
+namespace Rebus.TasksCoordinator
 {
     public class RebusMessageReader : MessageReader<TransportMessage, ITransactionContext>
     {

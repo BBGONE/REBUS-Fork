@@ -1,11 +1,11 @@
 ﻿using Rebus.Bus;
 using Rebus.Logging;
 using Rebus.Pipeline;
-using TasksCoordinator.Interface;
+using Rebus.TasksCoordinator.Interface;
 using Rebus.Transport;
 using Rebus.Workers.ThreadPoolBased;
 
-namespace TasksCoordinator
+namespace Rebus.TasksCoordinator
 {
     public class MessageReaderFactory : IMessageReaderFactory
     {

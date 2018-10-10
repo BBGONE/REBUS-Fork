@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace TasksCoordinator.Interface
+namespace Rebus.TasksCoordinator.Interface
 {
     public interface IMessageWorker<in M>
     {
