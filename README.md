@@ -4,6 +4,19 @@ of plain threads.
 <br/>
 Also it uses only one task when idle to monitor the queue for new messages instead of all worker threads as in the original Rebus implementation.
 <br/>
+The main reason to create this patch was to relieve the stress from the queue by constant polling it by multiple workers.
+It has the built-in autoscaling ability.
+<br/>
+Also it is better to cap the read parallelism (threads reading from the queue concurrently).
+<br/>
+In the original Rebus implementation there's
+the ParallelOperationsManager which caps overall parallelism (message processing as well, not only reading from the queue), also
+transports use AsyncBottleneck which caps overall access to the transport (not only the current queue).
+<br/>
+These caps are too broad. In my patch i introduced MaxReadParallelism instead of MaxParallelism (it was removed).
+The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
+<br> 
+So it is enough to operate with MaxReadParallelism (4 by default), and the number of the workers (which is really, just the maximum number of tasks that can be launched).
 P.S.: 
 For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
 the Rebus.Transports.Showdown.SqlServer projects.
