@@ -30,13 +30,13 @@ performance on my comp: the send is constant 2300 msgs/ sec
 <br/>
 The Receive:
 <br/>
-1) o.SetMaxParallelism(5) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 51 msgs/ sec)
+1.) o.SetMaxParallelism(5) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 51 msgs/ sec)
 <br/>
-2) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 1 (measure the receive performance - i have 738 msgs/ sec)
+2.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 1 (measure the receive performance - i have 738 msgs/ sec)
 <br/>
-3) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 568 msgs/ sec)
+3.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 568 msgs/ sec)
 <br/>
-4) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 20 (measure the receive performance - i have 688 msgs/ sec)
+4.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 20 (measure the receive performance - i have 688 msgs/ sec)
 <br/>
 <br/>
 For comparison: in the Rebus with WorkersCoordinator with 10 workers - receives at  2380 msgs/sec
