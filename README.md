@@ -21,9 +21,27 @@ So it is enough to operate with MaxReadParallelism (4 by default), and the numbe
 In the original Rebus implementation the number of workers is mostly redundant, because 1 is enough. 
 It spawns new task in the loop and does not wait for its completion, and that task becomes truly async on
 the async recieve. After the transport message have been recieved its processing goes to the thread pool thread.
-So, what the purpose of the number of workers? The main role plays the MaxParallelism, but the workers spawn
-the task even when the ParallelOperationsManager says it's enough - in that case the tasks complete without 
-reading from the queue. It would be better just to not spawn the task when the max number of them have been reached.
+So, what the purpose of the number of workers? The main role plays the MaxParallelism.
+<br/>
+I tried in the showdown sample project (with original Rebus 5) simple tests:
+<br/>
+performance on my comp: the send is constant 2300 msgs/ sec
+<br/>
+<br/>
+The Receive:
+<br/>
+1) o.SetMaxParallelism(5) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 51 msgs/ sec)
+<br/>
+2) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 1 (measure the receive performance - i have 738 msgs/ sec)
+<br/>
+3) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 568 msgs/ sec)
+<br/>
+4) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 20 (measure the receive performance - i have 688 msgs/ sec)
+<br/>
+<br/>
+For comparison: in the Rebus with WorkersCoordinator with 10 workers - receives at  2380 msgs/sec
+<br/>
+in the Rebus with WorkersCoordinator with 5 workers - receives at  2300 msgs/sec
 <br/>
 <br/>
 P.S.: 
