@@ -47,11 +47,6 @@ namespace Rebus.TasksCoordinator
             {
                 msg = await _transport.Receive(context, token);
             }
-            catch (TaskCanceledException)
-            {
-                // it's fine - just a sign that we are shutting down
-                throw;
-            }
             catch (OperationCanceledException)
             {
                 // it's fine - just a sign that we are shutting down
@@ -90,7 +85,7 @@ namespace Rebus.TasksCoordinator
             var disposable = await this.Coordinator.WaitReadAsync();
             try
             {
-                context = new TransactionContext();
+                context = new TransactionContextWithOwningBus(_owningBus);
             }
             catch
             {
@@ -129,52 +124,51 @@ namespace Rebus.TasksCoordinator
                 this.Coordinator.OnBeforeDoWork(this);
                 try
                 {
-                    context.Items["OwningBus"] = _owningBus;
-                    AmbientTransactionContext.SetCurrent(context);
-
-                    try
-                    {
-                        MessageProcessingResult res = await this.DispatchMessage(message, this.taskId, token, context).ConfigureAwait(false);
-                        if (res.isRollBack)
-                        {
-                            this.OnRollback(message, token);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        this.OnProcessMessageException(ex, message);
-                        throw;
-                    }
-
-                    try
-                    {
-                        await (context as TransactionContext).Complete();
-                    }
-                    catch (Exception exception)
-                    {
-                        Log.Error(exception, "An error occurred when attempting to complete the transaction context");
-                    }
-                }
-                catch (OperationCanceledException exception)
-                {
-                    context.Abort();
-
-                    Log.Error(exception, "Worker was aborted while handling message {messageLabel}", message.GetMessageLabel());
-                }
-                catch (Exception exception)
-                {
-                    context.Abort();
-
-                    Log.Error(exception, "Unhandled exception while handling message {messageLabel}", message.GetMessageLabel());
+                    await ProcessMessage(context, message);
                 }
                 finally
                 {
-                    AmbientTransactionContext.SetCurrent(null);
                     this.Coordinator.OnAfterDoWork(this);
                 }
-            } // Transaction Context
+            } // using Transaction Context
        
             return cnt;
+        }
+
+        async Task ProcessMessage(TransactionContext context, TransportMessage transportMessage)
+        {
+            try
+            {
+                AmbientTransactionContext.SetCurrent(context);
+
+                var stepContext = new IncomingStepContext(transportMessage, context);
+                await _pipelineInvoker.Invoke(stepContext);
+
+                try
+                {
+                    await context.Complete();
+                }
+                catch (Exception exception)
+                {
+                    Log.Error(exception, "An error occurred when attempting to complete the transaction context");
+                }
+            }
+            catch (OperationCanceledException exception)
+            {
+                context.Abort();
+
+                Log.Error(exception, "Worker was aborted while handling message {messageLabel}", transportMessage.GetMessageLabel());
+            }
+            catch (Exception exception)
+            {
+                context.Abort();
+
+                Log.Error(exception, "Unhandled exception while handling message {messageLabel}", transportMessage.GetMessageLabel());
+            }
+            finally
+            {
+                AmbientTransactionContext.SetCurrent(null);
+            }
         }
     }
 }
