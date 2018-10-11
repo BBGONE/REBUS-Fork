@@ -18,31 +18,6 @@ The MaxParallelism is the number of Workers (and they are really the TPL tasks, 
 <br> 
 So it is enough to operate with MaxReadParallelism (4 by default), and the number of the workers (which is really, just the maximum number of tasks that can be launched).
 <br/>
-In the original Rebus implementation the number of workers is mostly redundant, because 1 is enough. 
-It spawns new task in the loop and does not wait for its completion, and that task becomes truly async on
-the async recieve. After the transport message have been recieved its processing goes to the thread pool thread.
-So, what the purpose of the number of workers? The main role plays the MaxParallelism.
-<br/>
-I tried in the showdown sample project (with original Rebus 5) simple tests:
-<br/>
-performance on my comp: the send is constant 2300 msgs/ sec
-<br/>
-<br/>
-The Receive:
-<br/>
-1.) o.SetMaxParallelism(5) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 51 msgs/ sec)
-<br/>
-2.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 1 (measure the receive performance - i have 738 msgs/ sec)
-<br/>
-3.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 5 (measure the receive performance - i have 568 msgs/ sec)
-<br/>
-4.) o.SetMaxParallelism(20) and MaxNumberOfWorkers: 20 (measure the receive performance - i have 688 msgs/ sec)
-<br/>
-<br/>
-For comparison: in the Rebus with WorkersCoordinator with 10 workers - receives at  2380 msgs/sec
-<br/>
-in the Rebus with WorkersCoordinator with 5 workers - receives at  2300 msgs/sec
-<br/>
 <br/>
 P.S.: 
 For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
