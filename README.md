@@ -17,6 +17,8 @@ These caps are too broad. In my patch i introduced MaxReadParallelism instead of
 The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
 <br> 
 So it is enough to operate with MaxReadParallelism (4 by default), and the number of the workers (which is really, just the maximum number of tasks that can be launched).
+<br/>
+<br/>
 P.S.: 
 For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
 the Rebus.Transports.Showdown.SqlServer projects.
