@@ -18,6 +18,13 @@ The MaxParallelism is the number of Workers (and they are really the TPL tasks, 
 <br> 
 So it is enough to operate with MaxReadParallelism (4 by default), and the number of the workers (which is really, just the maximum number of tasks that can be launched).
 <br/>
+In the original Rebus implementation the number of workers is mostly redundant, because 1 is enough. 
+It spawns new task in the loop and does not wait for its completion, and that task becomes truly async on
+the async recieve. After the transport message have been recieved its processing goes to the thread pool thread.
+So, what the purpose of the number of workers? The main role plays the MaxParallelism, but the workers spawn
+the task even when the ParallelOperationsManager says it's enough - in that case the tasks complete without 
+reading from the queue. It would be better just to not spawn the task when the max number of them have been reached.
+<br/>
 <br/>
 P.S.: 
 For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
