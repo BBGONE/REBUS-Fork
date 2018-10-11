@@ -10,7 +10,7 @@ namespace Rebus.Transports.Showdown.SqlServer
     {
         const string QueueName = "test_showdown";
         const string SqlServerConnectionString = "Data Source=.;Initial Catalog=rebus2_test;Integrated Security=True;Connection Timeout=5";
-
+        
         public static void Main()
         {
             Action<IHandlerActivator> configureAdapter = (adapter) => {

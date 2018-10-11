@@ -185,6 +185,7 @@ namespace Rebus.TasksCoordinator
                     MessageReaderResult readerResult = new MessageReaderResult() { IsRemoved = false, IsWorkDone = false };
                     while (!readerResult.IsRemoved && !token.IsCancellationRequested)
                     {
+                        await Task.Yield();
                         readerResult = await reader.ProcessMessage(token).ConfigureAwait(false);
                     }
                 }
@@ -258,10 +259,14 @@ namespace Rebus.TasksCoordinator
 
         bool ITaskCoordinatorAdvanced.IsSafeToRemoveReader(IMessageReader reader, bool workDone)
         {
-            if (this.Token.IsCancellationRequested)
+            if (this.Token.IsCancellationRequested || this._tasksCanBeStarted < 0)
                 return true;
+            if (workDone)
+            {
+                return false;
+            }
             bool isPrimary = (object)reader == this._primaryReader;
-            return !isPrimary || this._tasksCanBeStarted < 0;
+            return !isPrimary;
         }
 
         bool ITaskCoordinatorAdvanced.IsPrimaryReader(IMessageReader reader)
