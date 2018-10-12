@@ -267,7 +267,8 @@ namespace Rebus.Transport.FileSystem
         string GetNextFileName()
         {
             Interlocked.CompareExchange(ref _incrementingCounter, 0, long.MaxValue);
-            return $"b{Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(20,'0')}_{_transportId}.json";
+            long seqnum = Interlocked.Increment(ref _incrementingCounter);
+            return $"b{DateTime.Now.Ticks.ToString().PadLeft(19,'0')}_{seqnum}_{_transportId}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
