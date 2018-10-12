@@ -12,6 +12,7 @@ namespace Rebus.TasksCoordinator
 {
     public class WorkersCoordinator : ITaskCoordinatorAdvanced, IWorkersCoordinator
     {
+        private readonly Task NOOP = Task.FromResult(0);
         private const long MAX_TASK_NUM = long.MaxValue;
         private const int STOP_TIMEOUT_MSec = 30000;
         private CancellationTokenSource _stopTokenSource;
@@ -20,6 +21,7 @@ namespace Rebus.TasksCoordinator
         private volatile int _isStarted;
         private volatile bool _isPaused;
         private volatile int _tasksCanBeStarted;
+        private CancellationToken _cancellationToken;
         private readonly ConcurrentDictionary<long, Task> _tasks;
         private readonly IMessageReaderFactory _readerFactory;
         private volatile IMessageReader _primaryReader;
@@ -40,7 +42,7 @@ namespace Rebus.TasksCoordinator
             this._stoppingTask = null;
             this._tasksCanBeStarted = 0;
             this._stopTokenSource = null;
-            this.Token = CancellationToken.None;
+            this._cancellationToken = CancellationToken.None;
             this._readerFactory = messageReaderFactory;
             this._maxWorkersCount = maxWorkersCount;
             this._taskIdSeq = 0;
@@ -56,7 +58,7 @@ namespace Rebus.TasksCoordinator
             if (oldStarted == 1)
                 return true;
             this._stopTokenSource = new CancellationTokenSource();
-            this.Token = this._stopTokenSource.Token;
+            this._cancellationToken = this._stopTokenSource.Token;
             this._taskIdSeq = 0;
             this._tasksCanBeStarted = this._maxWorkersCount;
             this._TryStartNewTask();
@@ -96,8 +98,7 @@ namespace Rebus.TasksCoordinator
 
         private void _ExitTask(long id)
         {
-            Task res;
-            if (this._tasks.TryRemove(id, out res))
+            if (this._tasks.TryRemove(id, out var _))
             {
                 Interlocked.Increment(ref this._tasksCanBeStarted);
             }
@@ -115,7 +116,6 @@ namespace Rebus.TasksCoordinator
 
         private bool _TryStartNewTask()
         {
-            bool result = false;
             bool semaphoreOK = false;
             long taskId = -1;
 
@@ -125,34 +125,29 @@ namespace Rebus.TasksCoordinator
 
                 if (semaphoreOK)
                 {
-                    var dummy = Task.FromResult(0);
                     try
                     {
                         Interlocked.CompareExchange(ref this._taskIdSeq, 0, MAX_TASK_NUM);
                         taskId = Interlocked.Increment(ref this._taskIdSeq);
-                        result = this._tasks.TryAdd(taskId, dummy);
+                        this._tasks.TryAdd(taskId, NOOP);
                     }
                     catch (Exception)
                     {
                         Interlocked.Increment(ref this._tasksCanBeStarted);
-                        Task res;
-                        if (result)
-                        {
-                            this._tasks.TryRemove(taskId, out res);
-                        }
+                        this._tasks.TryRemove(taskId, out var _);
                         throw;
                     }
 
                     var token = this._stopTokenSource.Token;
                     Task<long> task = Task.Run(() => JobRunner(token, taskId), token);
-                    this._tasks.TryUpdate(taskId, task, dummy);
+                    this._tasks.TryUpdate(taskId, task, NOOP);
                     task.ContinueWith((antecedent, id) => {
                         this._ExitTask((long)id);
                         if (antecedent.IsFaulted)
                         {
                             var err = antecedent.Exception;
                             err.Flatten().Handle((ex) => {
-                                Log.Error(ex, "");
+                                Log.Error(ex, $"the task {id} failed and this never should happen");
                                 return true;
                             });
                         }
@@ -166,7 +161,7 @@ namespace Rebus.TasksCoordinator
                 this._ExitTask(taskId);
                 if (!(ex is OperationCanceledException))
                 {
-                    Log.Error(ex, "");
+                    Log.Error(ex, "TryStartNewTask miserably failed");
                 }
             }
 
@@ -197,11 +192,11 @@ namespace Rebus.TasksCoordinator
             }
             catch (OperationCanceledException)
             {
-                // NOOP
+                // Good bye we cancelled
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "");
+                Log.Error(ex, $"JobRunner catched the exeption thrown by running task {taskId}");
             }
             finally
             {
@@ -259,7 +254,7 @@ namespace Rebus.TasksCoordinator
 
         bool ITaskCoordinatorAdvanced.IsSafeToRemoveReader(IMessageReader reader, bool workDone)
         {
-            if (this.Token.IsCancellationRequested || this._tasksCanBeStarted < 0)
+            if (this._cancellationToken.IsCancellationRequested || this._tasksCanBeStarted < 0)
                 return true;
             if (workDone)
             {
@@ -277,7 +272,7 @@ namespace Rebus.TasksCoordinator
         void ITaskCoordinatorAdvanced.OnBeforeDoWork(IMessageReader reader)
         {
             Interlocked.CompareExchange(ref this._primaryReader, null, reader);
-            this.Token.ThrowIfCancellationRequested();
+            this._cancellationToken.ThrowIfCancellationRequested();
             this._TryStartNewTask();
         }
 
@@ -316,16 +311,8 @@ namespace Rebus.TasksCoordinator
             }
         }
 
-        public int FreeReadersAvailable
-        {
-            get
-            {
-                return this._tasksCanBeStarted;
-            }
-        }
-
         /// <summary>
-        /// сколько сечас задач создано
+        /// how many tasks we have running now
         /// </summary>
         public int TasksCount
         {
@@ -335,12 +322,12 @@ namespace Rebus.TasksCoordinator
             }
         }
 
-        public CancellationToken Token { get; private set; }
-
         public bool IsPaused
         {
             get { return this._isPaused; }
             set { this._isPaused = value; }
         }
+
+        public CancellationToken Token { get => _stopTokenSource == null ? CancellationToken.None : _stopTokenSource.Token; }
     }
 }

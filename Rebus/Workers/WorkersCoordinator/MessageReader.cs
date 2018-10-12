@@ -53,16 +53,7 @@ namespace Rebus.TasksCoordinator
 
         protected MessageReaderResult AfterProcessedMessage(bool workDone, CancellationToken token)
         {
-            bool isRemoved = false;
-            if (token.IsCancellationRequested)
-            {
-                isRemoved = true;
-            }
-            else 
-            {
-                isRemoved = this._coordinator.IsSafeToRemoveReader(this, workDone) || this._coordinator.FreeReadersAvailable < 0;
-            }
-        
+            bool isRemoved = token.IsCancellationRequested || this._coordinator.IsSafeToRemoveReader(this, workDone);
             return new MessageReaderResult() { IsRemoved = isRemoved, IsWorkDone = workDone };
         }
 
