@@ -82,6 +82,50 @@ namespace Rebus.Transport.FileSystem
             });
         }
 
+        private static bool _RenameFile(string fullPath, string newFileName, out string newFilePath)
+        {
+            newFilePath = string.Empty;
+            try
+            {
+                string dirName = Path.GetDirectoryName(fullPath);
+                string fileName = Path.GetFileName(fullPath);
+                newFilePath = Path.Combine(dirName, newFileName);
+                FileInfo fileInfo = new FileInfo(fullPath);
+                fileInfo.MoveTo(newFilePath);
+                return true;
+            }
+            catch (IOException)
+            {
+                // the file is gone
+                newFilePath = string.Empty;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// change the first letter from any to t (means temporary)
+        /// </summary>
+        /// <param name="fullPath"></param>
+        /// <returns></returns>
+        private static bool _RenameToTemp(string fullPath, out string newFilePath)
+        {
+            string fileName = Path.GetFileName(fullPath);
+            string newFileName = $"t{fileName.Substring(1)}";
+            return _RenameFile(fullPath, newFileName, out newFilePath);
+        }
+
+        /// <summary>
+        /// change the first letter from any to e (means error)
+        /// </summary>
+        /// <param name="fullPath"></param>
+        /// <returns></returns>
+        private static bool _RenameToError(string fullPath, out string newFilePath)
+        {
+            string fileName = Path.GetFileName(fullPath);
+            string newFileName = $"e{fileName.Substring(1)}";
+            return _RenameFile(fullPath, newFileName, out newFilePath);
+        }
+
         /// <summary>
         /// Receives the next message from the logical input queue by loading the next file from the corresponding directory,
         /// deserializing it, deleting it when the transaction is committed.
@@ -89,13 +133,15 @@ namespace Rebus.Transport.FileSystem
         public async Task<TransportMessage> Receive(ITransactionContext context, CancellationToken cancellationToken)
         {
             string fullPath = null;
-            try
+
+            bool loopAgain = false;
+            do
             {
                 if (!this._filesQueue.TryDequeue(out fullPath))
                 {
-                    IEnumerable<string> fileNames = Directory.GetFiles(GetDirectoryForQueueNamed(_inputQueue), "*.rebusmessage.json")
+                    IEnumerable<string> fileNames = Directory.GetFiles(GetDirectoryForQueueNamed(_inputQueue), "b*.rebusmessage.json")
                         .OrderBy(f => f).Take(1000);
-                   
+
                     foreach (var name in fileNames)
                     {
                         if (_messagesBeingHandled.TryAdd(name, new object()))
@@ -104,52 +150,49 @@ namespace Rebus.Transport.FileSystem
 
                     this._filesQueue.TryDequeue(out fullPath);
                 }
-
+                
+                // all files were processed
                 if (fullPath == null) return null;
 
-                var jsonText = await ReadAllText(fullPath);
-                var receivedTransportMessage = Deserialize(jsonText);
-
-                if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
+                string newFullPath;
+                if (_RenameToTemp(fullPath, out newFullPath))
                 {
-                    var maxAge = TimeSpan.Parse(timeToBeReceived);
-
-                    var creationTimeUtc = File.GetCreationTimeUtc(fullPath);
-                    var nowUtc = RebusTime.Now.UtcDateTime;
-
-                    var messageAge = nowUtc - creationTimeUtc;
-
-                    if (messageAge > maxAge)
-                    {
-                        try
-                        {
-                            File.Delete(fullPath);
-                            return null;
-                        }
-                        finally
-                        {
-                            _messagesBeingHandled.TryRemove(fullPath, out var _);
-                        }
-                    }
-                }
-
-                context.OnCompleted(async () => File.Delete(fullPath));
-                context.OnDisposed(() =>
-                {
+                    // remove before changing the fullPath
                     _messagesBeingHandled.TryRemove(fullPath, out var _);
-                });
+                    fullPath = newFullPath;
+                    loopAgain = false;
+                }
+                else
+                {
+                    // if we can not rename the file then it's gone (probably processed already)
+                    // renaming helps to lock the file from other file processors
+                    _messagesBeingHandled.TryRemove(fullPath, out var _);
+                    loopAgain = true;
+                }
+            } while (loopAgain);
 
-                return receivedTransportMessage;
-            }
-            catch (IOException)
+            var jsonText = await ReadAllText(fullPath);
+            var receivedTransportMessage = Deserialize(jsonText);
+
+            if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
             {
-                if (fullPath != null)
-                {
-                    _messagesBeingHandled.TryRemove(fullPath, out var _);
-                }
+                var maxAge = TimeSpan.Parse(timeToBeReceived);
 
-                return null;
+                var creationTimeUtc = File.GetCreationTimeUtc(fullPath);
+                var nowUtc = RebusTime.Now.UtcDateTime;
+
+                var messageAge = nowUtc - creationTimeUtc;
+
+                if (messageAge > maxAge)
+                {
+                    File.Delete(fullPath);
+                    return null;
+                }
             }
+
+            context.OnCompleted(async () => File.Delete(fullPath));
+            context.OnAborted(async () => _RenameToError(fullPath, out var _));
+            return receivedTransportMessage;
         }
 
         static async Task<string> ReadAllText(string fileName)
@@ -196,7 +239,7 @@ namespace Rebus.Transport.FileSystem
             var count = 0;
             var directoryPath = GetDirectoryForQueueNamed(_inputQueue);
 
-            using (var enumerator = Directory.EnumerateFiles(directoryPath, "*.rebusmessage.json").GetEnumerator())
+            using (var enumerator = Directory.EnumerateFiles(directoryPath, "b*.rebusmessage.json").GetEnumerator())
             {
                 while (enumerator.MoveNext())
                 {
@@ -211,7 +254,7 @@ namespace Rebus.Transport.FileSystem
         string GetNextFileName()
         {
             return
-                $"{DateTime.UtcNow:yyyy_MM_dd_HH_mm_ss}_{Interlocked.Increment(ref _incrementingCounter):0000000}_{Guid.NewGuid()}.rebusmessage.json";
+                $"b{DateTime.UtcNow:yyyy_MM_dd_HH_mm_ss}_{Interlocked.Increment(ref _incrementingCounter):0000000}_{Guid.NewGuid()}.rebusmessage.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
