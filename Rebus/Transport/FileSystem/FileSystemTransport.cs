@@ -24,6 +24,7 @@ namespace Rebus.Transport.FileSystem
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
         const int BACKOFF_INTERVAL_MSEC = 500;
+        readonly Guid _transportId = Guid.NewGuid();
 
         readonly ConcurrentDictionary<string, object> _messagesBeingHandled = new ConcurrentDictionary<string, object>();
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
@@ -78,11 +79,10 @@ namespace Rebus.Transport.FileSystem
 
             context.OnCommitted(async () =>
             {
-                using (var stream = File.OpenWrite(fullPath))
-                using (var writer = new StreamWriter(stream, FavoriteEncoding))
+                using (var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 64, true))
                 {
-                     await Task.Yield();
-                     await writer.WriteAsync(serializedMessage);
+                    var bytes = FavoriteEncoding.GetBytes(serializedMessage);
+                    await stream.WriteAsync(bytes, 0, bytes.Length);
                 }
             });
         }
@@ -214,12 +214,13 @@ namespace Rebus.Transport.FileSystem
             return receivedTransportMessage;
         }
 
-        static async Task<string> ReadAllText(string fileName)
+        static async Task<string> ReadAllText(string fullPath)
         {
-            using (var stream = File.OpenRead(fileName))
-            using (var reader = new StreamReader(stream, FavoriteEncoding))
+            using (var stream1 = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 64, true))
+            using (var reader = new StreamReader(stream1, FavoriteEncoding, false, 1024 * 64, true))
             {
                 return await reader.ReadToEndAsync();
+                
             }
         }
 
@@ -266,7 +267,7 @@ namespace Rebus.Transport.FileSystem
         string GetNextFileName()
         {
             Interlocked.CompareExchange(ref _incrementingCounter, 0, long.MaxValue);
-            return $"b{Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(20,'0')}.json";
+            return $"b{Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(20,'0')}_{_transportId}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
