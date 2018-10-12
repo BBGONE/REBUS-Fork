@@ -28,3 +28,6 @@ from what when you will try to run the compiled exe file.
 For example, on my comp sending to the queue is 2500 msgs/ sec, but when run in Visual Studio it was 690 msgs/ sec.
 <br/>And the recieve results were also very different.
 <br/>You can compare it with the original Rebus performance if you reference the original nuget Rebus5 package in the projects instead of the patched Rebus in the solution.
+<br/><b>One thing to mention</b>: the tests in the Rebus usually use InMemoryTransport but it's a faulty approach because it uses the synchronous queue which is almost devoid of latency
+and read contention. For more real world results use transports which are async in nature (like the Sql Server Transport) and have a read contention to the same queue
+(this can be, File IO, Network IO, any real world queue).
