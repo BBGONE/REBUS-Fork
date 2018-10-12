@@ -27,6 +27,7 @@ namespace Rebus.Transport.FileSystem
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
         readonly string _baseDirectory;
         readonly string _inputQueue;
+        readonly ConcurrentQueue<string> _filesQueue;
 
         int _incrementingCounter = 1;
 
@@ -37,6 +38,7 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         public FileSystemTransport(string baseDirectory, string inputQueue)
         {
+            // Console.WriteLine("Transport created");
             _baseDirectory = baseDirectory;
 
             if (inputQueue == null) return;
@@ -44,6 +46,7 @@ namespace Rebus.Transport.FileSystem
             EnsureQueueNameIsValid(inputQueue);
 
             _inputQueue = inputQueue;
+            _filesQueue = new ConcurrentQueue<string>();
         }
 
         /// <summary>
@@ -88,20 +91,18 @@ namespace Rebus.Transport.FileSystem
             string fullPath = null;
             try
             {
-                var fileNames = Directory.GetFiles(GetDirectoryForQueueNamed(_inputQueue), "*.rebusmessage.json")
-                    .OrderBy(f => f)
-                    .ToList();
-
-                var index = 0;
-                while (index < fileNames.Count)
+                if (!this._filesQueue.TryDequeue(out fullPath))
                 {
-                    fullPath = fileNames[index++];
+                    IEnumerable<string> fileNames = Directory.GetFiles(GetDirectoryForQueueNamed(_inputQueue), "*.rebusmessage.json")
+                        .OrderBy(f => f).Take(1000);
+                   
+                    foreach (var name in fileNames)
+                    {
+                        if (_messagesBeingHandled.TryAdd(name, new object()))
+                            this._filesQueue.Enqueue(name);
+                    }
 
-                    // attempt to capture a "lock" on the file
-                    if (_messagesBeingHandled.TryAdd(fullPath, new object()))
-                        break;
-
-                    fullPath = null;
+                    this._filesQueue.TryDequeue(out fullPath);
                 }
 
                 if (fullPath == null) return null;
@@ -127,7 +128,7 @@ namespace Rebus.Transport.FileSystem
                         }
                         finally
                         {
-                            _messagesBeingHandled.TryRemove(fullPath, out object _);
+                            _messagesBeingHandled.TryRemove(fullPath, out var _);
                         }
                     }
                 }
@@ -135,7 +136,7 @@ namespace Rebus.Transport.FileSystem
                 context.OnCompleted(async () => File.Delete(fullPath));
                 context.OnDisposed(() =>
                 {
-                    _messagesBeingHandled.TryRemove(fullPath, out object _);
+                    _messagesBeingHandled.TryRemove(fullPath, out var _);
                 });
 
                 return receivedTransportMessage;
@@ -144,7 +145,7 @@ namespace Rebus.Transport.FileSystem
             {
                 if (fullPath != null)
                 {
-                    _messagesBeingHandled.TryRemove(fullPath, out object _);
+                    _messagesBeingHandled.TryRemove(fullPath, out var _);
                 }
 
                 return null;
