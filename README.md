@@ -23,8 +23,8 @@ P.S.:
 For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
 the Rebus.Transports.Showdown.SqlServer projects.
 <br/>
-If you want to see the real performance, then <b>don't run in Visual Studio</b> because the results are dramatically different
-from what when you will try to run the compiled exe file. 
+If you want to see the real performance, then <b>don't run in Visual Studio (or run without debug)</b> because the results are dramatically different
+from what when you will try to run the exe file without debugging. 
 For example, on my comp sending to the queue is 2500 msgs/ sec, but when run in Visual Studio it was 690 msgs/ sec.
 <br/>And the recieve results were also very different.
 <br/>You can compare it with the original Rebus performance if you reference the original nuget Rebus5 package in the projects instead of the patched Rebus in the solution.
