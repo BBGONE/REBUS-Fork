@@ -44,14 +44,24 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RunShowDown.cs" />
+    <Compile Include="TransportKind.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Rebus.Transports.Showdown.SqlServer\Rebus.Transports.Showdown.SqlServer.csproj">
-      <Project>{59714f9c-7d9a-4eac-9d66-4500e0a6b9ae}</Project>
-      <Name>Rebus.Transports.Showdown.SqlServer</Name>
+    <ProjectReference Include="..\..\Rebus.SqlServer\Rebus.SqlServer.csproj">
+      <Project>{f8bfb8af-6e27-4455-9f74-152d9df94876}</Project>
+      <Name>Rebus.SqlServer</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Rebus\Rebus.csproj">
+      <Project>{319215f6-b626-4271-8eda-e31b876f65c0}</Project>
+      <Name>Rebus</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Rebus.Transports.Showdown.Core\Rebus.Transports.Showdown.Core.csproj">
+      <Project>{fea9f7d9-1b00-4535-ac4d-bf3934a7b913}</Project>
+      <Name>Rebus.Transports.Showdown.Core</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

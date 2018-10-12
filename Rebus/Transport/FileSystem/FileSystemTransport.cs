@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Rebus.Bus;
 using Rebus.Exceptions;
 using Rebus.Messages;
+using Rebus.Threading;
 using Rebus.Time;
 #pragma warning disable 1998
 
@@ -22,14 +23,17 @@ namespace Rebus.Transport.FileSystem
     {
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
+        const int BACKOFF_INTERVAL_MSEC = 500;
 
         readonly ConcurrentDictionary<string, object> _messagesBeingHandled = new ConcurrentDictionary<string, object>();
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
         readonly string _baseDirectory;
         readonly string _inputQueue;
         readonly ConcurrentQueue<string> _filesQueue;
+        private DateTime _lastQueueCheck= DateTime.Now;
+        private AsyncBottleneck _queuelock;
 
-        int _incrementingCounter = 1;
+        long _incrementingCounter = 0;
 
         /// <summary>
         /// Constructs the file system transport to create "queues" as subdirectories of the specified base directory.
@@ -47,6 +51,7 @@ namespace Rebus.Transport.FileSystem
 
             _inputQueue = inputQueue;
             _filesQueue = new ConcurrentQueue<string>();
+            _queuelock = new AsyncBottleneck(1);
         }
 
         /// <summary>
@@ -65,7 +70,6 @@ namespace Rebus.Transport.FileSystem
         public async Task Send(string destinationQueueName, TransportMessage message, ITransactionContext context)
         {
             EnsureQueueInitialized(destinationQueueName);
-
             var destinationDirectory = GetDirectoryForQueueNamed(destinationQueueName);
 
             var serializedMessage = Serialize(message);
@@ -77,7 +81,8 @@ namespace Rebus.Transport.FileSystem
                 using (var stream = File.OpenWrite(fullPath))
                 using (var writer = new StreamWriter(stream, FavoriteEncoding))
                 {
-                    await writer.WriteAsync(serializedMessage);
+                     await Task.Yield();
+                     await writer.WriteAsync(serializedMessage);
                 }
             });
         }
@@ -126,33 +131,36 @@ namespace Rebus.Transport.FileSystem
             return _RenameFile(fullPath, newFileName, out newFilePath);
         }
 
-        /// <summary>
-        /// Receives the next message from the logical input queue by loading the next file from the corresponding directory,
-        /// deserializing it, deleting it when the transaction is committed.
-        /// </summary>
-        public async Task<TransportMessage> Receive(ITransactionContext context, CancellationToken cancellationToken)
-        {
+        private string _GetRecievedFilePath(CancellationToken cancellationToken) {
             string fullPath = null;
-
             bool loopAgain = false;
             do
             {
                 if (!this._filesQueue.TryDequeue(out fullPath))
                 {
-                    IEnumerable<string> fileNames = Directory.GetFiles(GetDirectoryForQueueNamed(_inputQueue), "b*.rebusmessage.json")
-                        .OrderBy(f => f).Take(1000);
-
-                    foreach (var name in fileNames)
+                    using(var locker = this._queuelock.Enter(cancellationToken))
                     {
-                        if (_messagesBeingHandled.TryAdd(name, new object()))
-                            this._filesQueue.Enqueue(name);
-                    }
+                        // try again, maybe another thread already added items to the queue
+                        if (!this._filesQueue.TryDequeue(out fullPath) && ((DateTime.Now - this._lastQueueCheck).TotalMilliseconds > BACKOFF_INTERVAL_MSEC))
+                        {
+                            IEnumerable<string> fileNames = Directory.EnumerateFiles(GetDirectoryForQueueNamed(_inputQueue), "b*.json")
+                            .OrderBy(f => f).Take(10000);
 
-                    this._filesQueue.TryDequeue(out fullPath);
+                            foreach (var name in fileNames)
+                            {
+                                if (_messagesBeingHandled.TryAdd(name, new object()))
+                                    this._filesQueue.Enqueue(name);
+                            }
+
+                            this._lastQueueCheck = DateTime.Now;
+                            this._filesQueue.TryDequeue(out fullPath);
+                        }
+                    }
                 }
-                
-                // all files were processed
-                if (fullPath == null) return null;
+
+                // nothing to receive
+                if (string.IsNullOrEmpty(fullPath))
+                    return null;
 
                 string newFullPath;
                 if (_RenameToTemp(fullPath, out newFullPath))
@@ -171,9 +179,20 @@ namespace Rebus.Transport.FileSystem
                 }
             } while (loopAgain);
 
+            return fullPath;
+        }
+
+        /// <summary>
+        /// Receives the next message from the logical input queue by loading the next file from the corresponding directory,
+        /// deserializing it, deleting it when the transaction is committed.
+        /// </summary>
+        public async Task<TransportMessage> Receive(ITransactionContext context, CancellationToken cancellationToken)
+        {
+            string fullPath = this._GetRecievedFilePath(cancellationToken);
+            if (string.IsNullOrEmpty(fullPath))
+                return null;
             var jsonText = await ReadAllText(fullPath);
             var receivedTransportMessage = Deserialize(jsonText);
-
             if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
             {
                 var maxAge = TimeSpan.Parse(timeToBeReceived);
@@ -236,25 +255,18 @@ namespace Rebus.Transport.FileSystem
 
         int GetCount(CancellationToken cancellationToken)
         {
-            var count = 0;
             var directoryPath = GetDirectoryForQueueNamed(_inputQueue);
-
-            using (var enumerator = Directory.EnumerateFiles(directoryPath, "b*.rebusmessage.json").GetEnumerator())
-            {
-                while (enumerator.MoveNext())
-                {
-                    count++;
-                    cancellationToken.ThrowIfCancellationRequested();
-                }
-            }
-
-            return count;
+            var files = Directory.EnumerateFiles(directoryPath, "b*.json");
+            return files.Aggregate(0, (counter, _) => {
+                cancellationToken.ThrowIfCancellationRequested();
+                return ++counter;
+            });
         }
 
         string GetNextFileName()
         {
-            return
-                $"b{DateTime.UtcNow:yyyy_MM_dd_HH_mm_ss}_{Interlocked.Increment(ref _incrementingCounter):0000000}_{Guid.NewGuid()}.rebusmessage.json";
+            Interlocked.CompareExchange(ref _incrementingCounter, 0, long.MaxValue);
+            return $"b{Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(20,'0')}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
