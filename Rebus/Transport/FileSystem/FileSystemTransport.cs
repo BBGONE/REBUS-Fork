@@ -24,7 +24,7 @@ namespace Rebus.Transport.FileSystem
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
         const int BACKOFF_INTERVAL_MSEC = 500;
-        readonly Guid _transportId = Guid.NewGuid();
+        readonly string _transportId = Guid.NewGuid().ToString().Replace("-", "");
 
         readonly ConcurrentDictionary<string, object> _messagesBeingHandled = new ConcurrentDictionary<string, object>();
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
@@ -268,7 +268,7 @@ namespace Rebus.Transport.FileSystem
         {
             Interlocked.CompareExchange(ref _incrementingCounter, 0, long.MaxValue);
             long seqnum = Interlocked.Increment(ref _incrementingCounter);
-            return $"b{DateTime.Now.Ticks.ToString().PadLeft(19,'0')}_{seqnum}_{_transportId}.json";
+            return $"b{DateTime.Now.Ticks.ToString().PadLeft(19,'0')}{seqnum.ToString().PadLeft(19, '0')}{_transportId}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
