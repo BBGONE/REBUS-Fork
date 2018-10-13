@@ -4,6 +4,7 @@
     {
         SqlServer,
         FileSystem,
-        InMemory
+        InMemory,
+        FileIOInMemory
     }
 }

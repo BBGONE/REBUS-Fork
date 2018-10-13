@@ -1,20 +1,20 @@
-﻿using Rebus.Messages;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Rebus.Messages;
 
-namespace Rebus.Transport.InMem
+namespace Rebus.Transport.InMem2
 {
     /// <summary>
     /// Represents a transport message that was delivered to an in-mem message queue
     /// </summary>
-    public class InMemTransportMessage
+    public class FileIOInMemTransportMessage
     {
         readonly DateTime _creationTime = DateTime.UtcNow;
 
         /// <summary>
         /// Constructs the in-mem transport message from the given <see cref="TransportMessage"/>
         /// </summary>
-        public InMemTransportMessage(TransportMessage transportMessage)
+        public FileIOInMemTransportMessage(TransportMessage transportMessage)
         {
             Headers = transportMessage.Headers;
             Body = transportMessage.Body;

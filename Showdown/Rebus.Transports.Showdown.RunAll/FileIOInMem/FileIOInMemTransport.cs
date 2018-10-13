@@ -6,23 +6,23 @@ using System.Threading;
 using System.Threading.Tasks;
 #pragma warning disable 1998
 
-namespace Rebus.Transport.InMem
+namespace Rebus.Transport.InMem2
 {
     /// <summary>
-    /// In-mem implementation of <see cref="ITransport"/> that uses one particular <see cref="InMemNetwork"/> to deliver messages. Can
+    /// In-mem implementation of <see cref="ITransport"/> that uses one particular <see cref="FileIOInMemNetwork"/> to deliver messages. Can
     /// be used for in-process messaging and unit testing
     /// </summary>
-    public class InMemTransport : ITransport, ITransportInspector, IInitializable
+    public class FileIOInMemTransport : ITransport, ITransportInspector, IInitializable
     {
-        readonly InMemNetwork _network;
+        readonly FileIOInMemNetwork _network;
         readonly string _inputQueueAddress;
 
         /// <summary>
-        /// Creates the transport, using the specified <see cref="InMemNetwork"/> to deliver/receive messages. This transport will have
+        /// Creates the transport, using the specified <see cref="FileIOInMemNetwork"/> to deliver/receive messages. This transport will have
         /// <paramref name="inputQueueAddress"/> as its input queue address, and thus will attempt to receive messages from the queue with that
         /// name out of the given <paramref name="network"/>
         /// </summary>
-        public InMemTransport(InMemNetwork network, string inputQueueAddress)
+        public FileIOInMemTransport(FileIOInMemNetwork network, string inputQueueAddress)
         {
             _network = network ?? throw new ArgumentNullException(nameof(network), "You need to provide a network that this in-mem transport should use for communication");
             _inputQueueAddress = inputQueueAddress;
@@ -60,8 +60,7 @@ namespace Rebus.Transport.InMem
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             if (_inputQueueAddress == null) throw new InvalidOperationException("This in-mem transport is initialized without an input queue, hence it is not possible to receive anything!");
-
-            var nextMessage = _network.GetNextOrNull(_inputQueueAddress);
+            var nextMessage = await _network.GetNextOrNull(_inputQueueAddress);
 
             if (nextMessage == null) return null;
 
