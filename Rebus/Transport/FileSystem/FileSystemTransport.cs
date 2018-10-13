@@ -60,17 +60,28 @@ namespace Rebus.Transport.FileSystem
             _exclusivelock = new AsyncBottleneck(1);
         }
 
+        static class RandomLetter
+        {
+            static Random _random = new Random(Guid.NewGuid().GetHashCode());
+            public static char GetLetter()
+            {
+                char[] chars = "abcdefghijklmnopqrstuvwxyz1234567890".ToCharArray();
+                int num = _random.Next(0, chars.Length); // Zero to chars.Length -1
+                return chars[num];
+            }
+        }
+
         private static string GenerateID()
         {
             var charsToRemove = new char[] { '/', '+', '=' };
-            var replacement = DateTime.Now.Ticks.ToString().ToCharArray().Reverse().Take(charsToRemove.Length).ToArray();
-            string str = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            var replacement = new char[] { RandomLetter.GetLetter(), RandomLetter.GetLetter(), RandomLetter.GetLetter() };
+            string str = Convert.ToBase64String(Guid.NewGuid().ToByteArray()).Substring(0,22);
             int len = str.Length;
             for (int i = 0; i < charsToRemove.Length; ++i)
             {
                 str = str.Replace(charsToRemove[i], replacement[i]);
             }
-            return str.PadRight(24, '0');
+            return str;
         }
 
         /// <summary>
@@ -93,6 +104,7 @@ namespace Rebus.Transport.FileSystem
 
             var serializedMessage = Serialize(message);
             var fileName = GetNextFileName();
+            int len = fileName.Length;
             var fullPath = Path.Combine(destinationDirectory, fileName);
             string tempFileName = $"t{fileName.Substring(1)}";
             string tempFilePath = Path.Combine(destinationDirectory, tempFileName);
@@ -317,10 +329,10 @@ namespace Rebus.Transport.FileSystem
 
         string GetNextFileName()
         {
-            Interlocked.CompareExchange(ref _incrementingCounter, 0, int.MaxValue);
+            Interlocked.CompareExchange(ref _incrementingCounter, 0, 99999);
             string ticks = (DateTime.Now.Ticks - historicalDate.Ticks).ToString().PadLeft(19, '0');
-            string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(10, '0');
-            return $"b{ticks}_{seqnum}_{_transportId}.json";
+            string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(5, '0');
+            return $"b{ticks}{seqnum}_{_transportId}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
