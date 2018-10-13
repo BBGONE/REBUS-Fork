@@ -23,18 +23,20 @@ namespace Rebus.Transport.FileSystem
     {
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
+        static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
         const int BACKOFF_INTERVAL_MSEC = 500;
-        readonly string _transportId = Guid.NewGuid().ToString().Replace("-", "");
+        readonly string _transportId;
 
-        readonly ConcurrentDictionary<string, object> _messagesBeingHandled = new ConcurrentDictionary<string, object>();
+        readonly HashSet<string> _messagesBeingHandled = new HashSet<string>();
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
         readonly string _baseDirectory;
         readonly string _inputQueue;
         readonly ConcurrentQueue<string> _filesQueue;
         private DateTime _lastQueueCheck= DateTime.Now;
-        private AsyncBottleneck _queuelock;
+        private AsyncBottleneck _exclusivelock;
+        private object _queuelock= new object();
 
-        long _incrementingCounter = 0;
+        int _incrementingCounter = 0;
 
         /// <summary>
         /// Constructs the file system transport to create "queues" as subdirectories of the specified base directory.
@@ -46,13 +48,23 @@ namespace Rebus.Transport.FileSystem
             // Console.WriteLine("Transport created");
             _baseDirectory = baseDirectory;
 
+            // Generate unique transport id
+            var charsToRemove = new string[] { "/", "+", "=" };
+            string str = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            int len = str.Length;
+            foreach (var c in charsToRemove)
+            {
+                str = str.Replace(c, "");
+            }
+            _transportId = str.PadRight(24,'0');
+
             if (inputQueue == null) return;
 
             EnsureQueueNameIsValid(inputQueue);
 
             _inputQueue = inputQueue;
             _filesQueue = new ConcurrentQueue<string>();
-            _queuelock = new AsyncBottleneck(1);
+            _exclusivelock = new AsyncBottleneck(1);
         }
 
         /// <summary>
@@ -76,14 +88,19 @@ namespace Rebus.Transport.FileSystem
             var serializedMessage = Serialize(message);
             var fileName = GetNextFileName();
             var fullPath = Path.Combine(destinationDirectory, fileName);
+            string tempFileName = $"t{fileName.Substring(1)}";
+            string tempFilePath = Path.Combine(destinationDirectory, tempFileName);
 
             context.OnCommitted(async () =>
             {
-                using (var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 64, true))
+                // write the file with the temporary name prefix (so it could not be read while it is written)
+                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 64, true))
                 {
                     var bytes = FavoriteEncoding.GetBytes(serializedMessage);
                     await stream.WriteAsync(bytes, 0, bytes.Length);
                 }
+                // rename the file after the write is completed
+                _RenameFile(tempFilePath, fileName, out var _);
             });
         }
 
@@ -131,30 +148,60 @@ namespace Rebus.Transport.FileSystem
             return _RenameFile(fullPath, newFileName, out newFilePath);
         }
 
-        private string _GetRecievedFilePath(CancellationToken cancellationToken) {
+        private bool _TryDequeue(out string fullPath)
+        {
+            fullPath = null;
+            var dirName = GetDirectoryForQueueNamed(this._inputQueue);
+            string fileName;
+            lock (this._queuelock)
+            {
+                if (this._filesQueue.TryDequeue(out fileName))
+                {
+                    this._messagesBeingHandled.Remove(fileName);
+                    fullPath = Path.Combine(dirName, fileName);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private async Task<string> _GetRecievedFilePath(CancellationToken cancellationToken) {
             string fullPath = null;
             bool loopAgain = false;
             do
             {
-                if (!this._filesQueue.TryDequeue(out fullPath))
+                if (!this._TryDequeue(out fullPath))
                 {
-                    using(var locker = this._queuelock.Enter(cancellationToken))
+                    IDisposable locker = await this._exclusivelock.Enter(cancellationToken);
+                    try
                     {
                         // try again, maybe another thread already added items to the queue
-                        if (!this._filesQueue.TryDequeue(out fullPath) && ((DateTime.Now - this._lastQueueCheck).TotalMilliseconds > BACKOFF_INTERVAL_MSEC))
+                        if (!this._TryDequeue(out fullPath) && ((DateTime.Now - this._lastQueueCheck).TotalMilliseconds > BACKOFF_INTERVAL_MSEC))
                         {
-                            IEnumerable<string> fileNames = Directory.EnumerateFiles(GetDirectoryForQueueNamed(_inputQueue), "b*.json")
-                            .OrderBy(f => f).Take(10000);
+                            var dirName = GetDirectoryForQueueNamed(this._inputQueue);
+                            DirectoryInfo info = new DirectoryInfo(dirName);
+                            var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(1000);
 
-                            foreach (var name in fileNames)
+                            foreach (var file in files)
                             {
-                                if (_messagesBeingHandled.TryAdd(name, new object()))
-                                    this._filesQueue.Enqueue(name);
+                                lock (this._queuelock)
+                                {
+                                    if (!this._messagesBeingHandled.Contains(file.Name))
+                                    {
+                                        this._filesQueue.Enqueue(file.Name);
+                                        this._messagesBeingHandled.Add(file.Name);
+                                    }
+                                }
+                                cancellationToken.ThrowIfCancellationRequested();
                             }
 
                             this._lastQueueCheck = DateTime.Now;
-                            this._filesQueue.TryDequeue(out fullPath);
+                            this._TryDequeue(out fullPath);
                         }
+                    }
+                    finally
+                    {
+                        locker.Dispose();
                     }
                 }
 
@@ -166,7 +213,6 @@ namespace Rebus.Transport.FileSystem
                 if (_RenameToTemp(fullPath, out newFullPath))
                 {
                     // remove before changing the fullPath
-                    _messagesBeingHandled.TryRemove(fullPath, out var _);
                     fullPath = newFullPath;
                     loopAgain = false;
                 }
@@ -174,7 +220,6 @@ namespace Rebus.Transport.FileSystem
                 {
                     // if we can not rename the file then it's gone (probably processed already)
                     // renaming helps to lock the file from other file processors
-                    _messagesBeingHandled.TryRemove(fullPath, out var _);
                     loopAgain = true;
                 }
             } while (loopAgain);
@@ -188,7 +233,7 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         public async Task<TransportMessage> Receive(ITransactionContext context, CancellationToken cancellationToken)
         {
-            string fullPath = this._GetRecievedFilePath(cancellationToken);
+            string fullPath = await this._GetRecievedFilePath(cancellationToken);
             if (string.IsNullOrEmpty(fullPath))
                 return null;
             var jsonText = await ReadAllText(fullPath);
@@ -266,9 +311,10 @@ namespace Rebus.Transport.FileSystem
 
         string GetNextFileName()
         {
-            Interlocked.CompareExchange(ref _incrementingCounter, 0, long.MaxValue);
-            long seqnum = Interlocked.Increment(ref _incrementingCounter);
-            return $"b{DateTime.Now.Ticks.ToString().PadLeft(19,'0')}{seqnum.ToString().PadLeft(19, '0')}{_transportId}.json";
+            Interlocked.CompareExchange(ref _incrementingCounter, 0, int.MaxValue);
+            string ticks = (DateTime.Now.Ticks - historicalDate.Ticks).ToString().PadLeft(19, '0');
+            string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(10, '0');
+            return $"b{ticks}_{seqnum}_{_transportId}.json";
         }
 
         void EnsureQueueNameIsValid(string queueName)
