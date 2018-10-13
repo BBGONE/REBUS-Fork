@@ -7,6 +7,9 @@ Also it uses only one task when idle to monitor the queue for new messages inste
 The main reason to create this patch was to relieve the stress from the queue by constant polling it by multiple workers.
 It has the built-in autoscaling ability.
 <br/>
+Also in the original Rebus the FileSystemTransport is very unoptimized (exceptionally slow) and can not be really used in existent projects.
+I have made the optimisations so it perfoms at 20 times of the original
+<br/>
 Also it is better to cap the read parallelism (threads reading from the queue concurrently).
 <br/>
 In the original Rebus implementation there's
