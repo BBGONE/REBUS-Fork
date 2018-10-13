@@ -49,14 +49,7 @@ namespace Rebus.Transport.FileSystem
             _baseDirectory = baseDirectory;
 
             // Generate unique transport id
-            var charsToRemove = new string[] { "/", "+", "=" };
-            string str = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
-            int len = str.Length;
-            foreach (var c in charsToRemove)
-            {
-                str = str.Replace(c, "");
-            }
-            _transportId = str.PadRight(24,'0');
+            _transportId = GenerateID();
 
             if (inputQueue == null) return;
 
@@ -65,6 +58,19 @@ namespace Rebus.Transport.FileSystem
             _inputQueue = inputQueue;
             _filesQueue = new ConcurrentQueue<string>();
             _exclusivelock = new AsyncBottleneck(1);
+        }
+
+        private static string GenerateID()
+        {
+            var charsToRemove = new char[] { '/', '+', '=' };
+            var replacement = DateTime.Now.Ticks.ToString().ToCharArray().Reverse().Take(charsToRemove.Length).ToArray();
+            string str = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            int len = str.Length;
+            for (int i = 0; i < charsToRemove.Length; ++i)
+            {
+                str = str.Replace(charsToRemove[i], replacement[i]);
+            }
+            return str.PadRight(24, '0');
         }
 
         /// <summary>
