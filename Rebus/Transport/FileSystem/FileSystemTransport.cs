@@ -251,29 +251,43 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         public async Task<TransportMessage> Receive(ITransactionContext context, CancellationToken cancellationToken)
         {
-            string fullPath = await this._GetRecievedFilePath(cancellationToken);
-            if (string.IsNullOrEmpty(fullPath))
-                return null;
-            var jsonText = await ReadAllText(fullPath);
-            var receivedTransportMessage = Deserialize(jsonText);
-            if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
-            {
-                var maxAge = TimeSpan.Parse(timeToBeReceived);
-
-                var creationTimeUtc = File.GetCreationTimeUtc(fullPath);
-                var nowUtc = RebusTime.Now.UtcDateTime;
-
-                var messageAge = nowUtc - creationTimeUtc;
-
-                if (messageAge > maxAge)
+            TransportMessage receivedTransportMessage = null;
+            string fullPath = null;
+            bool loopAgain = false;
+            do {
+                loopAgain = false;
+                receivedTransportMessage = null;
+                fullPath = await this._GetRecievedFilePath(cancellationToken);
+                if (!string.IsNullOrEmpty(fullPath))
                 {
-                    File.Delete(fullPath);
-                    return null;
-                }
-            }
+                    var jsonText = await ReadAllText(fullPath);
+                    receivedTransportMessage = Deserialize(jsonText);
 
-            context.OnCompleted(async () => File.Delete(fullPath));
-            context.OnAborted(async () => _RenameToError(fullPath, out var _));
+                    if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
+                    {
+                        var maxAge = TimeSpan.Parse(timeToBeReceived);
+
+                        string fileName = Path.GetFileName(fullPath);
+                        long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
+                        DateTime sendTimeUtc = new DateTime(ticks).ToUniversalTime();
+                        DateTime nowUtc = RebusTime.Now.UtcDateTime;
+
+                        var messageAge = nowUtc - sendTimeUtc;
+
+                        if (messageAge > maxAge)
+                        {
+                            File.Delete(fullPath);
+                            loopAgain = true;
+                        }
+                    }
+                }
+            } while (loopAgain);
+
+            if (receivedTransportMessage != null)
+            {
+                context.OnCompleted(async () => File.Delete(fullPath));
+                context.OnAborted(async () => _RenameToError(fullPath, out var _));
+            }
             return receivedTransportMessage;
         }
 
