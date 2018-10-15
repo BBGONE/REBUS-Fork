@@ -21,22 +21,22 @@ namespace Rebus.Transport.FileSystem
     /// </summary>
     public class FileSystemTransport : ITransport, IInitializable, ITransportInspector
     {
+        const int CACHE_SIZE = 500;
+        const int BACKOFF_MSEC = 500;
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
         static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
-        const int BACKOFF_INTERVAL_MSEC = 500;
-        readonly string _transportId;
 
         readonly HashSet<string> _messagesBeingHandled = new HashSet<string>();
         readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
         readonly string _baseDirectory;
         readonly string _inputQueue;
-        readonly ConcurrentQueue<string> _filesQueue;
-        private DateTime _lastQueueCheck= DateTime.Now;
-        private AsyncBottleneck _exclusivelock;
-        private object _queuelock= new object();
-
-        int _incrementingCounter = 0;
+        readonly string _transportId;
+        readonly ConcurrentQueue<string> _filesCache;
+        readonly AsyncBottleneck _exclusivelock;
+        readonly object _filesCacheLock= new object();
+        private long _lastNoMessage = DateTime.Now.AddHours(-1).Ticks;
+        private int _incrementingCounter = 0;
 
         /// <summary>
         /// Constructs the file system transport to create "queues" as subdirectories of the specified base directory.
@@ -56,7 +56,7 @@ namespace Rebus.Transport.FileSystem
             EnsureQueueNameIsValid(inputQueue);
 
             _inputQueue = inputQueue;
-            _filesQueue = new ConcurrentQueue<string>();
+            _filesCache = new ConcurrentQueue<string>();
             _exclusivelock = new AsyncBottleneck(1);
         }
 
@@ -208,9 +208,9 @@ namespace Rebus.Transport.FileSystem
             fullPath = null;
             var dirName = GetDirectoryForQueueNamed(this._inputQueue);
             string fileName;
-            lock (this._queuelock)
+            lock (this._filesCacheLock)
             {
-                if (this._filesQueue.TryDequeue(out fileName))
+                if (this._filesCache.TryDequeue(out fileName))
                 {
                     this._messagesBeingHandled.Remove(fileName);
                     fullPath = Path.Combine(dirName, fileName);
@@ -236,27 +236,35 @@ namespace Rebus.Transport.FileSystem
                     try
                     {
                         // try again, maybe another thread already added items to the queue
-                        if (!this._TryDequeue(out fullPath) && ((DateTime.Now - this._lastQueueCheck).TotalMilliseconds > BACKOFF_INTERVAL_MSEC))
+                        if (!this._TryDequeue(out fullPath))
                         {
-                            var dirName = GetDirectoryForQueueNamed(this._inputQueue);
-                            DirectoryInfo info = new DirectoryInfo(dirName);
-                            var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(1000);
-
-                            foreach (var file in files)
+                            TimeSpan lastNoMessage = TimeSpan.FromTicks(DateTime.Now.Ticks - this._lastNoMessage);
+                            if (lastNoMessage.TotalMilliseconds > BACKOFF_MSEC)
                             {
-                                lock (this._queuelock)
+                                var dirName = GetDirectoryForQueueNamed(this._inputQueue);
+                                DirectoryInfo info = new DirectoryInfo(dirName);
+                                var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(CACHE_SIZE);
+                                int cnt = 0;
+                                lock (this._filesCacheLock)
                                 {
-                                    if (!this._messagesBeingHandled.Contains(file.Name))
+                                    foreach (var file in files)
                                     {
-                                        this._filesQueue.Enqueue(file.Name);
-                                        this._messagesBeingHandled.Add(file.Name);
+                                        if (!this._messagesBeingHandled.Contains(file.Name))
+                                        {
+                                            this._filesCache.Enqueue(file.Name);
+                                            this._messagesBeingHandled.Add(file.Name);
+                                            ++cnt;
+                                        }
+
+                                        cancellationToken.ThrowIfCancellationRequested();
                                     }
                                 }
-                                cancellationToken.ThrowIfCancellationRequested();
+                                if (cnt == 0)
+                                {
+                                    this._lastNoMessage = DateTime.Now.Ticks;
+                                }
+                                this._TryDequeue(out fullPath);
                             }
-
-                            this._lastQueueCheck = DateTime.Now;
-                            this._TryDequeue(out fullPath);
                         }
                     }
                     finally

@@ -44,7 +44,7 @@ namespace Rebus.Transports.Showdown
                             t.UseSqlServer(SqlServerConnectionString, QueueName);
                             break;
                         case TransportKind.FileSystem:
-                            t.UseFileSystem(@"c:\DATA\TEMP\REBUS\QUEUES\", QueueName);
+                            t.UseFileSystem(@"c:\DATA\REBUS\QUEUES\", QueueName);
                             break;
                         case TransportKind.InMemory:
                             t.UseInMemoryTransport(new InMemNetwork(), QueueName);
