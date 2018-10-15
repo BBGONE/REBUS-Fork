@@ -42,11 +42,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="FileIOInMem\FileIOInMemNetwork.cs" />
-    <Compile Include="FileIOInMem\FileIOInMemTransport.cs" />
-    <Compile Include="FileIOInMem\InMemTransportConfigurationExtensions.cs" />
-    <Compile Include="FileIOInMem\InMemTransportMessage.cs" />
-    <Compile Include="FileIOInMem\InMemTransportMessageExtensions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RunShowDown.cs" />

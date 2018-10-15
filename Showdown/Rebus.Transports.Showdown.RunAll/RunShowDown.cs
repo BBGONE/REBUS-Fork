@@ -2,7 +2,6 @@
 using Rebus.Config;
 using Rebus.Transport.FileSystem;
 using Rebus.Transport.InMem;
-using Rebus.Transport.InMem2;
 using Rebus.Transports.Showdown.Core;
 using System;
 using System.Data.SqlClient;
@@ -30,9 +29,6 @@ namespace Rebus.Transports.Showdown
                 case TransportKind.InMemory:
                     messageCount = 100000;
                     break;
-                case TransportKind.FileIOInMemory:
-                    messageCount = 30000;
-                    break;
                 default:
                     messageCount = 1000;
                     break;
@@ -45,22 +41,14 @@ namespace Rebus.Transports.Showdown
                     switch (transportKind)
                     {
                         case TransportKind.SqlServer:
-                            // use sql server tables to write and read messages from them
                             t.UseSqlServer(SqlServerConnectionString, QueueName);
                             break;
                         case TransportKind.FileSystem:
-                            // use the optimised FileSystem transport (messages are sent as ordinary files written to folders)
-                            t.UseFileSystem(@"c:\DATA\REBUS\QUEUES", QueueName);
+                            t.UseFileSystem(@"c:\DATA\TEMP\REBUS\QUEUES\", QueueName);
                             break;
                         case TransportKind.InMemory:
-                            // it is built-in in the Rebus transport
                             t.UseInMemoryTransport(new InMemNetwork(), QueueName);
                             break;
-                        case TransportKind.FileIOInMemory:
-                            // Adds the overhead of reading file from the file sytem asynchronously
-                            t.UseFileIOInMemoryTransport(new FileIOInMemNetwork(@"c:\DATA\SQL\MessageRetrival.sql"), QueueName);
-                            break;
-
                     }
                 })
                 .Options(o =>

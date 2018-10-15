@@ -1,5 +1,5 @@
-﻿using Rebus.Config;
-using System;
+﻿using System;
+using Rebus.Config;
 
 namespace Rebus.Transport.InMem
 {

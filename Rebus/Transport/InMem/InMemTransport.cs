@@ -1,9 +1,9 @@
-﻿using Rebus.Bus;
-using Rebus.Messages;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Rebus.Bus;
+using Rebus.Messages;
 #pragma warning disable 1998
 
 namespace Rebus.Transport.InMem

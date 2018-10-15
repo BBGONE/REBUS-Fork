@@ -166,6 +166,43 @@ namespace Rebus.Transport.FileSystem
             return _RenameFile(fullPath, newFileName, out newFilePath);
         }
 
+        /// <summary>
+        /// Gets the date in UTC when the file was sent
+        /// </summary>
+        /// <param name="fullPath"></param>
+        /// <returns></returns>
+        private static DateTime _GetSendDate(string fullPath)
+        {
+            string fileName = Path.GetFileName(fullPath);
+            long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
+            return new DateTime(ticks).ToUniversalTime();
+        }
+
+        /// <summary>
+        /// Checks if the message is still valid to be received
+        /// </summary>
+        /// <param name="fullPath"></param>
+        /// <param name="receivedTransportMessage"></param>
+        /// <returns></returns>
+        private static bool _CheckIsValid(string fullPath, TransportMessage receivedTransportMessage)
+        {
+            bool isValid = true;
+            if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
+            {
+                var maxAge = TimeSpan.Parse(timeToBeReceived);
+                DateTime sendTimeUtc = _GetSendDate(fullPath);
+                DateTime nowUtc = RebusTime.Now.UtcDateTime;
+
+                var messageAge = nowUtc - sendTimeUtc;
+
+                if (messageAge > maxAge)
+                {
+                    isValid = false;
+                }
+            }
+            return isValid;
+        }
+
         private bool _TryDequeue(out string fullPath)
         {
             fullPath = null;
@@ -183,6 +220,11 @@ namespace Rebus.Transport.FileSystem
             return false;
         }
 
+        /// <summary>
+        /// Gets the full path to the next file to be received or null if no files
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         private async Task<string> _GetRecievedFilePath(CancellationToken cancellationToken) {
             string fullPath = null;
             bool loopAgain = false;
@@ -228,16 +270,15 @@ namespace Rebus.Transport.FileSystem
                     return null;
 
                 string newFullPath;
+                // renaming helps to lock the file from other file processors
                 if (_RenameToTemp(fullPath, out newFullPath))
                 {
-                    // remove before changing the fullPath
                     fullPath = newFullPath;
                     loopAgain = false;
                 }
                 else
                 {
                     // if we can not rename the file then it's gone (probably processed already)
-                    // renaming helps to lock the file from other file processors
                     loopAgain = true;
                 }
             } while (loopAgain);
@@ -254,7 +295,8 @@ namespace Rebus.Transport.FileSystem
             TransportMessage receivedTransportMessage = null;
             string fullPath = null;
             bool loopAgain = false;
-            do {
+            do
+            {
                 loopAgain = false;
                 receivedTransportMessage = null;
                 fullPath = await this._GetRecievedFilePath(cancellationToken);
@@ -262,27 +304,14 @@ namespace Rebus.Transport.FileSystem
                 {
                     var jsonText = await ReadAllText(fullPath);
                     receivedTransportMessage = Deserialize(jsonText);
-
-                    if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
+                    if (!_CheckIsValid(fullPath, receivedTransportMessage))
                     {
-                        var maxAge = TimeSpan.Parse(timeToBeReceived);
-
-                        string fileName = Path.GetFileName(fullPath);
-                        long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
-                        DateTime sendTimeUtc = new DateTime(ticks).ToUniversalTime();
-                        DateTime nowUtc = RebusTime.Now.UtcDateTime;
-
-                        var messageAge = nowUtc - sendTimeUtc;
-
-                        if (messageAge > maxAge)
-                        {
-                            File.Delete(fullPath);
-                            loopAgain = true;
-                        }
+                        File.Delete(fullPath);
+                        loopAgain = true;
                     }
                 }
             } while (loopAgain);
-
+            
             if (receivedTransportMessage != null)
             {
                 context.OnCompleted(async () => File.Delete(fullPath));

@@ -1,6 +1,6 @@
-﻿using Rebus.Messages;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Rebus.Messages;
 
 namespace Rebus.Transport.InMem
 {

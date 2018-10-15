@@ -1,8 +1,9 @@
-﻿using Rebus.Extensions;
-using Rebus.Messages;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
+using System.Threading.Tasks;
+using Rebus.Extensions;
+using Rebus.Messages;
 
 namespace Rebus.Transport.InMem
 {
