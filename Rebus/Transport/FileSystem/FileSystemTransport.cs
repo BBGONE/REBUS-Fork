@@ -21,20 +21,21 @@ namespace Rebus.Transport.FileSystem
     /// </summary>
     public class FileSystemTransport : ITransport, IInitializable, ITransportInspector
     {
-        const int CACHE_SIZE = 1000;
+        const int CACHE_SIZE = 5000;
         const int BACKOFF_MSEC = 500;
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;
         static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
 
         readonly HashSet<string> _messagesBeingHandled = new HashSet<string>();
-        readonly ConcurrentBag<string> _queuesAlreadyInitialized = new ConcurrentBag<string>();
         readonly string _baseDirectory;
         readonly string _inputQueue;
         readonly string _transportId;
+        readonly ConcurrentDictionary<string, string> _initializedQueues;
         readonly ConcurrentQueue<string> _filesCache;
         readonly AsyncBottleneck _exclusivelock;
         readonly object _filesCacheLock= new object();
+        readonly object _queueInitLock = new object();
         private long _lastNoMessage = DateTime.Now.AddHours(-1).Ticks;
         private int _incrementingCounter = 0;
 
@@ -58,6 +59,7 @@ namespace Rebus.Transport.FileSystem
             _inputQueue = inputQueue;
             _filesCache = new ConcurrentQueue<string>();
             _exclusivelock = new AsyncBottleneck(1);
+            _initializedQueues = new ConcurrentDictionary<string, string>();
         }
 
         static class RandomLetter
@@ -99,20 +101,18 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         public async Task Send(string destinationQueueName, TransportMessage message, ITransactionContext context)
         {
-            EnsureQueueInitialized(destinationQueueName);
-            var destinationDirectory = GetDirectoryForQueueNamed(destinationQueueName);
+            var destinationDirectory = EnsureQueueInitialized(destinationQueueName);
 
             var serializedMessage = Serialize(message);
             var fileName = GetNextFileName();
-            int len = fileName.Length;
-            var fullPath = Path.Combine(destinationDirectory, fileName);
             string tempFileName = $"t{fileName.Substring(1)}";
             string tempFilePath = Path.Combine(destinationDirectory, tempFileName);
 
             context.OnCommitted(async () =>
             {
+                // new file in async mode
                 // write the file with the temporary name prefix (so it could not be read while it is written)
-                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 64, true))
+                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 8, true))
                 {
                     var bytes = FavoriteEncoding.GetBytes(serializedMessage);
                     await stream.WriteAsync(bytes, 0, bytes.Length);
@@ -330,8 +330,8 @@ namespace Rebus.Transport.FileSystem
 
         static async Task<string> ReadAllText(string fullPath)
         {
-            using (var stream1 = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 64, true))
-            using (var reader = new StreamReader(stream1, FavoriteEncoding, false, 1024 * 64, true))
+            using (var stream1 = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 8, true))
+            using (var reader = new StreamReader(stream1, FavoriteEncoding, false, 1024 * 8, true))
             {
                 return await reader.ReadToEndAsync();
                 
@@ -400,32 +400,45 @@ namespace Rebus.Transport.FileSystem
                 $"Cannot use '{_inputQueue}' as an input queue name because it contains the following invalid characters: {string.Join(", ", invalidPathCharactersPresentsInQueueName.Select(c => $"'{c}'"))}");
         }
 
-        void EnsureQueueInitialized(string queueName)
+        string EnsureQueueInitialized(string queueName)
         {
-            if (_queuesAlreadyInitialized.Contains(queueName)) return;
+            string directory;
+            if (_initializedQueues.TryGetValue(queueName, out directory))
+                return directory;
 
-            var directory = GetDirectoryForQueueNamed(queueName);
-
-            if (Directory.Exists(directory)) return;
-
-            Exception caughtException = null;
-            try
+            lock (this._queueInitLock)
             {
-                Directory.CreateDirectory(directory);
-            }
-            catch (Exception exception)
-            {
-                caughtException = exception;
-            }
+                // double check to prevent race
+                if (_initializedQueues.TryGetValue(queueName, out directory))
+                    return directory;
 
-            if (caughtException != null && !Directory.Exists(directory))
-            {
-                throw new RebusApplicationException(
-                    caughtException, $"Could not initialize directory '{directory}' for queue named '{queueName}'");
-            }
+                directory = GetDirectoryForQueueNamed(queueName);
 
-            // if an exception occurred but the directory exists now, it must have been a race... we're good
-            _queuesAlreadyInitialized.Add(queueName);
+                if (Directory.Exists(directory))
+                {
+                    _initializedQueues.TryAdd(queueName, directory);
+                    return directory;
+                }
+
+                Exception caughtException = null;
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                catch (Exception exception)
+                {
+                    caughtException = exception;
+                }
+
+                if (caughtException != null && !Directory.Exists(directory))
+                {
+                    throw new RebusApplicationException(
+                        caughtException, $"Could not initialize directory '{directory}' for queue named '{queueName}'");
+                }
+
+                _initializedQueues.TryAdd(queueName, directory);
+                return directory;
+            }
         }
 
         string GetDirectoryForQueueNamed(string queueName)
