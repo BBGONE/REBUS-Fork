@@ -241,7 +241,7 @@ namespace Rebus.Transport.FileSystem
                             TimeSpan lastNoMessage = TimeSpan.FromTicks(DateTime.Now.Ticks - this._lastNoMessage);
                             if (lastNoMessage.TotalMilliseconds > BACKOFF_MSEC)
                             {
-                                var dirName = GetDirectoryForQueueNamed(this._inputQueue);
+                                var dirName = EnsureQueueInitialized(this._inputQueue);
                                 DirectoryInfo info = new DirectoryInfo(dirName);
                                 var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(CACHE_SIZE);
                                 int cnt = 0;
