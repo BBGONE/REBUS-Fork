@@ -24,7 +24,7 @@ namespace Rebus.Transports.Showdown
                     messageCount = 1000;
                     break;
                 case TransportKind.FileSystem:
-                    messageCount = 1000;
+                    messageCount = 2000;
                     break;
                 case TransportKind.InMemory:
                     messageCount = 100000;

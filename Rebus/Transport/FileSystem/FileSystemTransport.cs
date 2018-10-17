@@ -21,7 +21,7 @@ namespace Rebus.Transport.FileSystem
     /// </summary>
     public class FileSystemTransport : ITransport, IInitializable, ITransportInspector
     {
-        const int CACHE_SIZE = 5000;
+        const int CACHE_SIZE = 1000;
         const int BACKOFF_MSEC = 500;
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
         static readonly Encoding FavoriteEncoding = Encoding.UTF8;

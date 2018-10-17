@@ -178,19 +178,21 @@ namespace Rebus.TasksCoordinator
                 try
                 {
                     MessageReaderResult readerResult = new MessageReaderResult() { IsRemoved = false, IsWorkDone = false };
-                    while (!readerResult.IsRemoved && !token.IsCancellationRequested)
+                    bool loopAgain = false;
+                    do
                     {
                         readerResult = await reader.ProcessMessage(token).ConfigureAwait(false);
+                        loopAgain = !readerResult.IsRemoved && !token.IsCancellationRequested;
                         // the task is rescheduled to the threadpool which allows other scheduled tasks to be processed
                         // otherwise it could use exclusively the threadpool thread
-                        await Task.Yield();
-                    }
+                        if (loopAgain)
+                            await Task.Yield();
+                    } while (loopAgain);
                 }
                 finally
                 {
                     Interlocked.CompareExchange(ref this._primaryReader, null, reader);
                 }
-                token.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException)
             {
