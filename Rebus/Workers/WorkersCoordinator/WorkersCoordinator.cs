@@ -181,7 +181,8 @@ namespace Rebus.TasksCoordinator
                     while (!readerResult.IsRemoved && !token.IsCancellationRequested)
                     {
                         readerResult = await reader.ProcessMessage(token).ConfigureAwait(false);
-                        // ensures that the task will continue on threadpool thread
+                        // the task is rescheduled to the threadpool which allows other scheduled tasks to be processed
+                        // otherwise it could use exclusively the threadpool thread
                         await Task.Yield();
                     }
                 }
