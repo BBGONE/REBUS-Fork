@@ -112,7 +112,7 @@ namespace Rebus.Transport.FileSystem
             {
                 // new file in async mode
                 // write the file with the temporary name prefix (so it could not be read while it is written)
-                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.Write, 1024 * 8, true))
+                using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 8, true))
                 {
                     var bytes = FavoriteEncoding.GetBytes(serializedMessage);
                     await stream.WriteAsync(bytes, 0, bytes.Length);
@@ -330,8 +330,8 @@ namespace Rebus.Transport.FileSystem
 
         static async Task<string> ReadAllText(string fullPath)
         {
-            using (var stream1 = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 8, true))
-            using (var reader = new StreamReader(stream1, FavoriteEncoding, false, 1024 * 8, true))
+            using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 8, true))
+            using (var reader = new StreamReader(stream, FavoriteEncoding, false, 1024 * 8, true))
             {
                 return await reader.ReadToEndAsync();
                 
