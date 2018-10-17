@@ -180,8 +180,9 @@ namespace Rebus.TasksCoordinator
                     MessageReaderResult readerResult = new MessageReaderResult() { IsRemoved = false, IsWorkDone = false };
                     while (!readerResult.IsRemoved && !token.IsCancellationRequested)
                     {
-                        await Task.Yield();
                         readerResult = await reader.ProcessMessage(token).ConfigureAwait(false);
+                        // ensures that the task will continue on threadpool thread
+                        await Task.Yield();
                     }
                 }
                 finally
