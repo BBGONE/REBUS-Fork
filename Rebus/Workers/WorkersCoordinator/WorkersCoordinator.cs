@@ -181,7 +181,7 @@ namespace Rebus.TasksCoordinator
                     bool loopAgain = false;
                     do
                     {
-                        readerResult = await reader.ProcessMessage(token).ConfigureAwait(false);
+                        readerResult = await reader.TryProcessMessage(token).ConfigureAwait(false);
                         loopAgain = !readerResult.IsRemoved && !token.IsCancellationRequested;
                         // the task is rescheduled to the threadpool which allows other scheduled tasks to be processed
                         // otherwise it could use exclusively the threadpool thread
@@ -258,7 +258,7 @@ namespace Rebus.TasksCoordinator
 
         bool ITaskCoordinatorAdvanced.IsSafeToRemoveReader(IMessageReader reader, bool workDone)
         {
-            if (this._cancellationToken.IsCancellationRequested || this._tasksCanBeStarted < 0)
+            if (this._tasksCanBeStarted < 0)
                 return true;
             if (workDone)
             {

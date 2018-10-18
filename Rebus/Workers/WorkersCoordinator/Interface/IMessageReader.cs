@@ -6,7 +6,7 @@ namespace Rebus.TasksCoordinator.Interface
     public interface IMessageReader
     {
         long taskId { get; }
-        Task<MessageReaderResult> ProcessMessage(CancellationToken token);
+        Task<MessageReaderResult> TryProcessMessage(CancellationToken token);
         bool IsPrimaryReader { get; }
     }
 }
