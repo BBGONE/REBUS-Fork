@@ -14,7 +14,7 @@ namespace Rebus.Transports.Showdown
         const string SqlServerConnectionString = "Data Source=.;Initial Catalog=rebus2_test;Integrated Security=True;Connection Timeout=5";
         private static InMemNetwork inMemNetwork;
 
-        public static async Task Run(TransportKind transportKind, int receiversCount =3, int readParallelism = 4, int numberOfWorkers = 10, bool isLongRun = false)
+        public static async Task Run(TransportKind transportKind, int receiversCount = 3, int readParallelism = 4, int numberOfWorkers = 10, bool isLongRun = false)
         {
             int messageCount = _GetMeassageCount(transportKind);
 

@@ -84,8 +84,8 @@ Puttin' on the Ritz {cnt}");
 
         private async Task HandleShortRunMessage(TestMessage message, CancellationToken token = default(CancellationToken))
         {
-            // SHORT SYNCHRONOUS TASK - execute as is on the default thread (from thread pool)
-            CPU_TASK(message, 10);
+            // VERY SHORT SYNCHRONOUS TASK - execute as is on the default thread (from thread pool)
+            CPU_TASK(message, 1);
         }
         #endregion
 

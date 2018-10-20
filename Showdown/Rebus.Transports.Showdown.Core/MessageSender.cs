@@ -27,50 +27,20 @@ namespace Rebus.Transports.Showdown
             configure(_adapter);
         }
 
-        public async Task Send(int messageCount = 1000)
+        public async Task Send(int messageCount)
         {
             try
             {
                 var sentMessagesCount = 0;
                 Print($"Sending using {_transportKind} {messageCount} messages from sender to receiver");
 
-                var senderBus = (RebusBus)_adapter.Bus;
                 var senderWatch = Stopwatch.StartNew();
 
-                // partition the range in 10 parts
-                int partionCount = 10;
-                var groups = Enumerable.Range(0, messageCount).Select((item, index) => new
-                {
-                    item,
-                    index
-                }).GroupBy(group => group.index % partionCount, element => element.item);
+                var range = Enumerable.Range(0, messageCount);
 
-                List<Task> tasks = new List<Task>();
-                foreach (var group in groups)
-                {
-                    //Console.WriteLine("Partion: {0}", group.Key);
+                sentMessagesCount =  await SendRangeWithPartitioning(range, messageCount, partionCount: 10);
+                // sentMessagesCount = await SendRangeWithLinqSelect(range);
 
-                    var localGroup = group;
-                    // for each partition send messages to the queue in its own task
-                    var task = Task.Run(async () =>
-                    {
-                        int cnt = 0;
-                        foreach (var num in localGroup)
-                        {
-                            ++cnt;
-                            var message = new TestMessage { MessageId = num + (localGroup.Key  * partionCount) };
-                            await senderBus.SendLocal(message);
-                            Interlocked.Increment(ref sentMessagesCount);
-                        }
-
-                        Console.WriteLine($"Patrition #{localGroup.Key} Size: {cnt}");
-                    });
-
-                    tasks.Add(task);
-                }
-
-                // wait until all messages  will be sent
-                await Task.WhenAll(tasks);
                 senderWatch.Stop();
 
                 var totalSecondsSending = senderWatch.Elapsed.TotalSeconds;
@@ -83,6 +53,78 @@ namespace Rebus.Transports.Showdown
             }
         }
 
+        async Task<int> SendRangeWithPartitioning(IEnumerable<int> range, int messageCount, int partionCount = 10)
+        {
+            var sentMessagesCount = 0;
+            var partions = PartitionCollection(range, partionCount: partionCount);
+            int partionSize = messageCount / partionCount;
+
+            List<Task> tasks = new List<Task>();
+            foreach (var partion in partions)
+            {
+                //Console.WriteLine("Partion: {0}", group.Key);
+                var localPartion = partion;
+                // for each partition send messages to the queue in its own task
+                var task1 = SendPartition(partion, partionSize);
+                var task2 = task1.ContinueWith((t) => {
+                    Interlocked.Add(ref sentMessagesCount, t.Result);
+                }, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnRanToCompletion);
+                tasks.Add(task2);
+            }
+
+            await Task.WhenAll(tasks);
+            return sentMessagesCount;
+        }
+
+        async Task<int> SendRangeWithLinqSelect(IEnumerable<int> range)
+        {
+            var sentMessagesCount = 0;
+
+            var tasks = Task.WhenAll(range.Select(async i =>
+            {
+                var message = new TestMessage { MessageId = i };
+                await _adapter.Bus.SendLocal(message);
+                Interlocked.Increment(ref sentMessagesCount);
+            }));
+
+            // wait until all messages  will be sent
+            await Task.WhenAll(tasks);
+            return sentMessagesCount;
+        }
+
+        IEnumerable<IGrouping<int,T>> PartitionCollection<T>(IEnumerable<T> collection, int partionCount)
+        {
+            IEnumerable<IGrouping<int, T>> groups = collection.Select((item, index) => new
+            {
+                item,
+                index
+            }).GroupBy(group => group.index % partionCount, element => element.item);
+            return groups;
+        }
+
+        Task<int> SendPartition(IGrouping<int,int> partion, int partionSize)
+        {
+            var senderBus = (RebusBus)_adapter.Bus;
+
+            int sentMessagesCount = 0;
+
+            var task = Task.Run(async () =>
+            {
+                int cnt = 0;
+                foreach (var num in partion)
+                {
+                    ++cnt;
+                    var message = new TestMessage { MessageId = num + (partion.Key * partionSize) };
+                    await senderBus.SendLocal(message);
+                    Interlocked.Increment(ref sentMessagesCount);
+                }
+
+                Console.WriteLine($"Patrition #{partion.Key} Size: {cnt} offset: {partion.Key * partionSize}");
+                return sentMessagesCount;
+            });
+
+            return task;
+        }
 
         void Print(string message, params object[] objs)
         {
