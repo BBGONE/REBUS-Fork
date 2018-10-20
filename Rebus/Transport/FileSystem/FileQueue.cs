@@ -39,7 +39,10 @@ namespace Rebus.Transport.FileSystem
             do
             {
                 loopAgain = false;
+                fullPath = null;
+                fileName = null;
                 string tempPath = null;
+
                 lock (this._filesCacheLock)
                 {
                     if (this._filesQueue.TryDequeue(out fileName))
@@ -53,8 +56,9 @@ namespace Rebus.Transport.FileSystem
                     }
                 }
 
-                if (!TransportHelper.RenameToTemp(tempPath, out fullPath))
+                if (!TransportHelper.RenameToUniqueTempName(tempPath, out fullPath))
                 {
+                    // this file is used by somebody else (try to get another one)
                     loopAgain = true;
                 }
             } while (loopAgain);

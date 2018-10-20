@@ -1,4 +1,4 @@
-﻿namespace Rebus.Transports.Showdown.Core
+﻿namespace Rebus.Transports.Showdown
 {
     public class TestMessage
     {

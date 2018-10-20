@@ -91,7 +91,7 @@ namespace Rebus.Transport.FileSystem
             if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
             {
                 var maxAge = TimeSpan.Parse(timeToBeReceived);
-                var messageAge = TransportHelper.GetAge(fullPath);
+                var messageAge = TransportHelper.GetFileAge(fullPath);
 
                 if (messageAge > maxAge)
                 {
