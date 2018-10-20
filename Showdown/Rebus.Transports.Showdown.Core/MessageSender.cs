@@ -27,30 +27,30 @@ namespace Rebus.Transports.Showdown
             configure(_adapter);
         }
 
-        public async Task Send(int count = 1000)
+        public async Task Send(int messageCount = 1000)
         {
             try
             {
                 var sentMessagesCount = 0;
-                Print($"Sending using {_transportKind} {count} messages from sender to receiver");
+                Print($"Sending using {_transportKind} {messageCount} messages from sender to receiver");
 
                 var senderBus = (RebusBus)_adapter.Bus;
                 var senderWatch = Stopwatch.StartNew();
 
                 // partition the range in 10 parts
-                int partionSize = 10;
-                var groups = Enumerable.Range(0, count).Select((i, index) => new
+                int partionCount = 10;
+                var groups = Enumerable.Range(0, messageCount).Select((item, index) => new
                 {
-                    i,
+                    item,
                     index
-                }).GroupBy(group => group.index % partionSize, element => element.i);
+                }).GroupBy(group => group.index % partionCount, element => element.item);
 
                 List<Task> tasks = new List<Task>();
                 foreach (var group in groups)
                 {
                     //Console.WriteLine("Partion: {0}", group.Key);
 
-                    IGrouping<int, int> localGroup = group;
+                    var localGroup = group;
                     // for each partition send messages to the queue in its own task
                     var task = Task.Run(async () =>
                     {
@@ -58,12 +58,12 @@ namespace Rebus.Transports.Showdown
                         foreach (var num in localGroup)
                         {
                             ++cnt;
-                            var message = new TestMessage { MessageId = num + (localGroup.Key  * partionSize) };
+                            var message = new TestMessage { MessageId = num + (localGroup.Key  * partionCount) };
                             await senderBus.SendLocal(message);
                             Interlocked.Increment(ref sentMessagesCount);
                         }
 
-                        // Console.WriteLine($"Patrition #{localGroup.Key} Size: {cnt}");
+                        Console.WriteLine($"Patrition #{localGroup.Key} Size: {cnt}");
                     });
 
                     tasks.Add(task);
@@ -71,6 +71,7 @@ namespace Rebus.Transports.Showdown
 
                 // wait until all messages  will be sent
                 await Task.WhenAll(tasks);
+                senderWatch.Stop();
 
                 var totalSecondsSending = senderWatch.Elapsed.TotalSeconds;
                 Print("Sending {0} messages took {1:0.0} s ({2:0.0} msg/s)",

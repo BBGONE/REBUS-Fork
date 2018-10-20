@@ -106,8 +106,8 @@ Running Receive: {0} -----------------------------------------------------------
                     printTimer.Interval = 5000;
                     printTimer.Elapsed += delegate
                     {
-                        var timeReceiving = receiverWatch.Elapsed.TotalMilliseconds;
-                        Print($"{name} TotalReceived: {totalReceivedCount} LocalReceived:  {receivedCount} time: {timeReceiving:0.0} ms");
+                        var _timeReceiving = receiverWatch.Elapsed.TotalMilliseconds;
+                        Print($"{name} TotalReceived: {totalReceivedCount} BusReceived:  {receivedCount} time: {_timeReceiving:0.0} ms");
                     };
                     printTimer.Start();
 
@@ -117,17 +117,11 @@ Running Receive: {0} -----------------------------------------------------------
                     */
 
 
-                    try
-                    {
+                    await _tcs.Task;
 
-                        await _tcs.Task;
-                        var timeReceiving = receiverWatch.Elapsed.TotalMilliseconds;
-                        Print($"{name} TotalReceived: {totalReceivedCount} LocalReceived:  {receivedCount} time: {timeReceiving/ 1000:0.0} sec speed: {(totalReceivedCount/ timeReceiving) * 1000:0.00} msg/sec");
-                    }
-                    finally
-                    {
-                        receiverWatch.Stop();
-                    }
+                    receiverWatch.Stop();
+                    var timeReceiving = receiverWatch.Elapsed.TotalMilliseconds;
+                    Print($"{name} TotalReceived: {totalReceivedCount} BusReceived:  {receivedCount} time: {timeReceiving / 1000:0.0} sec speed: {(totalReceivedCount / timeReceiving) * 1000:0.00} msg/sec");
                 }
             }
             catch (Exception e)
