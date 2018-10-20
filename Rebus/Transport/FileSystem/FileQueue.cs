@@ -1,5 +1,4 @@
-﻿using Rebus.Threading;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -13,10 +12,10 @@ namespace Rebus.Transport.FileSystem
     {
         const int CACHE_SIZE = 1000;
         const int BACKOFF_MSEC = 500;
+        private int _accessCounter;
         readonly string _inputQueue;
         readonly HashSet<string> _filesCache;
         readonly ConcurrentQueue<string> _filesQueue;
-        readonly AsyncBottleneck _exclusivelock;
         readonly QueueRegister _queueRegister;
         readonly object _filesCacheLock = new object();
         private long _lastNoMessage = DateTime.Now.AddHours(-1).Ticks;
@@ -27,7 +26,7 @@ namespace Rebus.Transport.FileSystem
             _queueRegister = queueRegister;
             _filesCache = new HashSet<string>();
             _filesQueue = new ConcurrentQueue<string>();
-            _exclusivelock = new AsyncBottleneck(1);
+            _accessCounter = 0;
         }
 
 
@@ -54,7 +53,7 @@ namespace Rebus.Transport.FileSystem
                     }
                 }
 
-                if (!FileSystemHelper.RenameToTemp(tempPath, out fullPath))
+                if (!TransportHelper.RenameToTemp(tempPath, out fullPath))
                 {
                     loopAgain = true;
                 }
@@ -68,13 +67,15 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task<string> Dequeue(CancellationToken cancellationToken)
+        public string Dequeue(CancellationToken cancellationToken)
         {
             string fullPath = null;
 
             if (!this._TryDequeue(out fullPath))
             {
-                IDisposable locker = await this._exclusivelock.Enter(cancellationToken);
+                // allow only one thread at a time to fill the cache (it is done without locking)
+                if (Interlocked.CompareExchange(ref _accessCounter, 1, 0) > 0)
+                    return null;
                 try
                 {
                     // try again, maybe another thread already added items to the queue
@@ -115,9 +116,10 @@ namespace Rebus.Transport.FileSystem
                 }
                 finally
                 {
-                    locker.Dispose();
+                    Interlocked.CompareExchange(ref _accessCounter, 0, 1);
                 }
             }
+
             return fullPath;
         }
     }

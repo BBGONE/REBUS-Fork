@@ -40,7 +40,7 @@ namespace Rebus.Transport.FileSystem
         public string GetNextFileName()
         {
             Interlocked.CompareExchange(ref _incrementingCounter, 0, 99999);
-            string ticks = (DateTime.Now.Ticks - FileSystemHelper.historicalDate.Ticks).ToString().PadLeft(19, '0');
+            string ticks = TransportHelper.GetTimeTicks();
             string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(5, '0');
             return $"b{ticks}{seqnum}_{_transportId}.json";
         }

@@ -34,7 +34,7 @@ namespace Rebus.Transport.FileSystem
         public FileSystemTransport(string baseDirectory, string inputQueue)
         {
             if (inputQueue == null) return;
-            FileSystemHelper.EnsureQueueNameIsValid(inputQueue);
+            TransportHelper.EnsureQueueNameIsValid(inputQueue);
             _inputQueue = inputQueue;
 
             _queueRegister = new QueueRegister(baseDirectory);
@@ -75,7 +75,7 @@ namespace Rebus.Transport.FileSystem
                 }
                 
                 // rename the file after the write is completed
-                FileSystemHelper.RenameFile(tempFilePath, fileName, out var _);
+                TransportHelper.RenameFile(tempFilePath, fileName, out var _);
             });
         }
 
@@ -91,10 +91,7 @@ namespace Rebus.Transport.FileSystem
             if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
             {
                 var maxAge = TimeSpan.Parse(timeToBeReceived);
-                DateTime sendTimeUtc = FileSystemHelper.GetSendDate(fullPath);
-                DateTime nowUtc = RebusTime.Now.UtcDateTime;
-
-                var messageAge = nowUtc - sendTimeUtc;
+                var messageAge = TransportHelper.GetAge(fullPath);
 
                 if (messageAge > maxAge)
                 {
@@ -117,7 +114,7 @@ namespace Rebus.Transport.FileSystem
             {
                 loopAgain = false;
                 receivedTransportMessage = null;
-                fullPath = await _fileQueue.Dequeue(cancellationToken);
+                fullPath = _fileQueue.Dequeue(cancellationToken);
                 if (!string.IsNullOrEmpty(fullPath))
                 {
                     var jsonText = await ReadAllText(fullPath);
@@ -137,7 +134,7 @@ namespace Rebus.Transport.FileSystem
                     File.Delete(fullPath);
                 });
                 context.OnAborted(async () => {
-                    FileSystemHelper.RenameToError(fullPath, out var _);
+                    TransportHelper.RenameToError(fullPath, out var _);
                 });
             }
             return receivedTransportMessage;

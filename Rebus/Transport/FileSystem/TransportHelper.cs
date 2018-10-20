@@ -1,12 +1,13 @@
-﻿using System;
+﻿using Rebus.Time;
+using System;
 using System.IO;
 using System.Linq;
 
 namespace Rebus.Transport.FileSystem
 {
-    class FileSystemHelper
+    class TransportHelper
     {
-        public static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
+        private static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
 
         public static bool RenameFile(string fullPath, string newFileName, out string newFilePath)
         {
@@ -62,6 +63,20 @@ namespace Rebus.Transport.FileSystem
             string fileName = Path.GetFileName(fullPath);
             long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
             return new DateTime(ticks).ToUniversalTime();
+        }
+
+
+        public static string GetTimeTicks()
+        {
+            return (DateTime.Now.Ticks - TransportHelper.historicalDate.Ticks).ToString().PadLeft(19, '0');
+        }
+
+        public static TimeSpan GetAge(string fullPath)
+        {
+            DateTime sendTimeUtc = TransportHelper.GetSendDate(fullPath);
+            DateTime nowUtc = RebusTime.Now.UtcDateTime;
+
+           return nowUtc - sendTimeUtc;
         }
 
         public static void EnsureQueueNameIsValid(string queueName)
