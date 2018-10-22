@@ -116,7 +116,10 @@ namespace Rebus.Transports.Showdown
                     ++cnt;
                     var message = new TestMessage { MessageId = num + (partion.Key * partionSize) };
                     await senderBus.SendLocal(message);
-                    // await senderBus.DeferLocal(TimeSpan.FromSeconds(15), message);
+                    /*
+                    Random rand = new Random(Guid.NewGuid().GetHashCode());
+                    await senderBus.DeferLocal(TimeSpan.FromSeconds(rand.Next(1, 60)), message);
+                    */
                     Interlocked.Increment(ref sentMessagesCount);
                 }
 

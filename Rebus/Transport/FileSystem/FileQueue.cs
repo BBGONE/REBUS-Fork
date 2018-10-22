@@ -4,21 +4,23 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Rebus.Transport.FileSystem
 {
     class FileQueue
     {
         const int CACHE_SIZE = 1000;
-        const int BACKOFF_MSEC = 1000;
+        const int DEFER_CACHE_SIZE = 500;
+        const int BACKOFF_NOMSG_MSEC = 500;
+        const int BACKOFF_DEFERED_MSEC = 5000;
         private int _accessCounter;
         readonly string _inputQueue;
         readonly HashSet<string> _filesCache;
         readonly ConcurrentQueue<string> _filesQueue;
         readonly QueueRegister _queueRegister;
         readonly object _filesCacheLock = new object();
-        private long _lastNoMessage = DateTime.Now.AddHours(-1).Ticks;
+        private long _lastNoMessage = DateTime.Now.AddHours(-12).Ticks;
+        private long _lastDefered = DateTime.Now.AddHours(-12).Ticks;
 
         public FileQueue(string inputQueue, QueueRegister queueRegister)
         {
@@ -57,15 +59,13 @@ namespace Rebus.Transport.FileSystem
 
                 }
                
-                /*
-                // Check if the file is defered (skip them)
-                if (TransportHelper.GetFileDate(fileName) > DateTime.Now.ToUniversalTime())
+               
+                // Check if the file is defered (skip them if not ready for processing)
+                if (TransportHelper.GetFileUtcDate(fileName) > DateTime.Now.ToUniversalTime())
                 {
                     loopAgain = true;
                 }
-                */
-
-                if (!TransportHelper.RenameToTempWithLock(tempPath, out fullPath))
+                else if (!TransportHelper.RenameToTempWithLock(tempPath, out fullPath))
                 {
                     // this file is used by somebody else (try to get another one)
                     loopAgain = true;
@@ -75,7 +75,7 @@ namespace Rebus.Transport.FileSystem
             return true;
         }
 
-        private int _TryFillCache(string dirName, CancellationToken cancellationToken)
+        private int _TryFillCache(List<string> tempStore, string dirName, CancellationToken cancellationToken)
         {
             DirectoryInfo info = new DirectoryInfo(dirName);
             // Important, ToList completes enumeration and allows to hold filesCacheLock shorter
@@ -88,7 +88,7 @@ namespace Rebus.Transport.FileSystem
                 {
                     if (!this._filesCache.Contains(file.Name))
                     {
-                        this._filesQueue.Enqueue(file.Name);
+                        tempStore.Add(file.Name);
                         this._filesCache.Add(file.Name);
                         ++cnt;
                     }
@@ -99,10 +99,10 @@ namespace Rebus.Transport.FileSystem
             return cnt;
         }
 
-        private int _TryFillCacheDefered(string dirName, CancellationToken cancellationToken)
+        private int _TryFillCacheDefered(List<string> tempStore, string dirName, CancellationToken cancellationToken)
         {
             DirectoryInfo info = new DirectoryInfo(dirName);
-            var files = info.EnumerateFiles("d*.json").Where(p=> TransportHelper.GetFileDate(p.Name) <= DateTime.Now.ToUniversalTime()).OrderBy(p => p.Name).Take(CACHE_SIZE).ToList();
+            var files = info.EnumerateFiles("d*.json").OrderBy(p => p.Name).Take(DEFER_CACHE_SIZE).ToList();
             int cnt = 0;
 
             foreach (var file in files)
@@ -111,7 +111,7 @@ namespace Rebus.Transport.FileSystem
                 {
                     if (!this._filesCache.Contains(file.Name))
                     {
-                        this._filesQueue.Enqueue(file.Name);
+                        tempStore.Add(file.Name);
                         this._filesCache.Add(file.Name);
                         ++cnt;
                     }
@@ -142,17 +142,30 @@ namespace Rebus.Transport.FileSystem
                     if (!this._TryDequeue(out fullPath))
                     {
                         TimeSpan lastNoMessage = TimeSpan.FromTicks(DateTime.Now.Ticks - this._lastNoMessage);
-                        if (lastNoMessage.TotalMilliseconds > BACKOFF_MSEC)
+                        if (lastNoMessage.TotalMilliseconds > BACKOFF_NOMSG_MSEC)
                         {
                             var dirName = _queueRegister.EnsureQueueInitialized(this._inputQueue);
-                            int cnt = this._TryFillCache(dirName, cancellationToken);
-                            cnt += _TryFillCacheDefered(dirName, cancellationToken);
+                            List<string> tempStore = new List<string>();
+
+                            int cnt = this._TryFillCache(tempStore, dirName, cancellationToken);
+
+                            // Don't check it too often
+                            TimeSpan lastDefered = TimeSpan.FromTicks(DateTime.Now.Ticks - this._lastDefered);
+                            if (lastDefered.TotalMilliseconds > BACKOFF_DEFERED_MSEC)
+                            {
+                                this._TryFillCacheDefered(tempStore, dirName, cancellationToken);
+                                this._lastDefered = DateTime.Now.Ticks;
+                            }
+
+                            foreach (string name in tempStore.OrderBy(name => TransportHelper.GetFileUtcDate(name)))
+                            {
+                                this._filesQueue.Enqueue(name);
+                            }
 
                             if (cnt == 0)
                             {
                                 this._lastNoMessage = DateTime.Now.Ticks;
                             }
-
                             this._TryDequeue(out fullPath);
                         }
                     }

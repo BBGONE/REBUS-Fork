@@ -106,7 +106,7 @@ namespace Rebus.Transport.FileSystem
         /// </summary>
         /// <param name="fileName"></param>
         /// <returns></returns>
-        public static DateTime GetFileDate(string fileName)
+        public static DateTime GetFileUtcDate(string fileName)
         {
             long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
             return new DateTime(ticks).ToUniversalTime();
