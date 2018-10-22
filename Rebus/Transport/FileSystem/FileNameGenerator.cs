@@ -21,5 +21,14 @@ namespace Rebus.Transport.FileSystem
             string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(5, '0');
             return $"b{ticks}{seqnum}_{_transportId}.json";
         }
+
+        public string GetDeferedFileName(DateTime deferUntil)
+        {
+            string id = TransportHelper.GenerateID();
+            Interlocked.CompareExchange(ref _incrementingCounter, 0, 99999);
+            string ticks = TransportHelper.GetTimeTicks(deferUntil);
+            string seqnum = Interlocked.Increment(ref _incrementingCounter).ToString().PadLeft(5, '0');
+            return $"d{ticks}{seqnum}_{id}.json";
+        }
     }
 }

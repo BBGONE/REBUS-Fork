@@ -60,7 +60,16 @@ namespace Rebus.Transport.FileSystem
             var destinationDirectory = _queueRegister.EnsureQueueInitialized(destinationQueueName);
 
             var serializedMessage = Serialize(message);
-            var fileName = _fileNameGenerator.GetNextFileName();
+            var fileName = string.Empty;
+            if (message.Headers.TryGetValue(Headers.DeferredUntil, out var deferTime))
+            {
+                var deferUntil = DateTime.Parse(deferTime);
+                fileName = _fileNameGenerator.GetDeferedFileName(deferUntil);
+            }
+            else
+            {
+                fileName = _fileNameGenerator.GetNextFileName();
+            }
             string tempFileName = $"t{fileName.Substring(1)}";
             string tempFilePath = Path.Combine(destinationDirectory, tempFileName);
 
@@ -88,16 +97,23 @@ namespace Rebus.Transport.FileSystem
         private static bool _CheckIsValid(string fullPath, TransportMessage receivedTransportMessage)
         {
             bool isValid = true;
+
             if (receivedTransportMessage.Headers.TryGetValue(Headers.TimeToBeReceived, out var timeToBeReceived))
             {
+                var messageAge = TimeSpan.Zero;
+                if (receivedTransportMessage.Headers.TryGetValue(Headers.SentTime, out var sentTime))
+                {
+                    var sentTimeDate = DateTimeOffset.Parse(sentTime);
+                    messageAge = RebusTime.Now - sentTimeDate;
+                }
                 var maxAge = TimeSpan.Parse(timeToBeReceived);
-                var messageAge = TransportHelper.GetFileAge(fullPath);
-
                 if (messageAge > maxAge)
                 {
                     isValid = false;
                 }
             }
+           
+          
             return isValid;
         }
 

@@ -1,5 +1,9 @@
 ﻿using System;
 using Rebus.Config;
+using Rebus.Persistence.Throwing;
+using Rebus.Pipeline;
+using Rebus.Pipeline.Receive;
+using Rebus.Timeouts;
 
 namespace Rebus.Transport.FileSystem
 {
@@ -20,6 +24,16 @@ namespace Rebus.Transport.FileSystem
             configurer
                 .OtherService<FileSystemTransport>()
                 .Register(context => new FileSystemTransport(baseDirectory, inputQueueName));
+
+            configurer.OtherService<ITimeoutManager>().Register(c => new DisabledTimeoutManager());
+
+            configurer.OtherService<IPipeline>().Decorate(c =>
+            {
+                var pipeline = c.Get<IPipeline>();
+
+                return new PipelineStepRemover(pipeline)
+                    .RemoveIncomingStep(s => s.GetType() == typeof(HandleDeferredMessagesStep));
+            });
 
             configurer
                 .OtherService<ITransportInspector>()

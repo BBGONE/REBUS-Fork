@@ -104,11 +104,10 @@ namespace Rebus.Transport.FileSystem
         /// <summary>
         /// Gets the date in UTC when the file was sent
         /// </summary>
-        /// <param name="fullPath"></param>
+        /// <param name="fileName"></param>
         /// <returns></returns>
-        public static DateTime GetSendDate(string fullPath)
+        public static DateTime GetFileDate(string fileName)
         {
-            string fileName = Path.GetFileName(fullPath);
             long ticks = long.Parse(fileName.Substring(1, 19), System.Globalization.NumberStyles.Number) + historicalDate.Ticks;
             return new DateTime(ticks).ToUniversalTime();
         }
@@ -123,28 +122,12 @@ namespace Rebus.Transport.FileSystem
         }
 
         /// <summary>
-        /// Get the age of the file (it is coded in the file name)
+        /// Get the DateTime ticks in the form of the padded with '0' string
         /// </summary>
-        /// <param name="fullPath"></param>
         /// <returns></returns>
-        public static TimeSpan GetFileAge(string fullPath)
+        public static string GetTimeTicks(DateTime date)
         {
-            DateTime sendTimeUtc = TransportHelper.GetSendDate(fullPath);
-            DateTime nowUtc = RebusTime.Now.UtcDateTime;
-
-           return nowUtc - sendTimeUtc;
-        }
-
-        /// <summary>
-        /// Derives a new unique name from the file name
-        /// </summary>
-        /// <param name="fileName"></param>
-        /// <returns></returns>
-        public static string GetDerivedTempFileName(string fileName)
-        {
-            string part1 = fileName.Substring(1, PART1_LENGH);
-            string uniqueId = GenerateID();
-            return $"t{part1}_{uniqueId}.json";
+            return (date.Ticks - TransportHelper.historicalDate.Ticks).ToString().PadLeft(19, '0');
         }
 
         /// <summary>

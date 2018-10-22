@@ -11,7 +11,7 @@ namespace Rebus.Transport.FileSystem
     class FileQueue
     {
         const int CACHE_SIZE = 1000;
-        const int BACKOFF_MSEC = 500;
+        const int BACKOFF_MSEC = 1000;
         private int _accessCounter;
         readonly string _inputQueue;
         readonly HashSet<string> _filesCache;
@@ -54,7 +54,16 @@ namespace Rebus.Transport.FileSystem
                     {
                         return false;
                     }
+
                 }
+               
+                /*
+                // Check if the file is defered (skip them)
+                if (TransportHelper.GetFileDate(fileName) > DateTime.Now.ToUniversalTime())
+                {
+                    loopAgain = true;
+                }
+                */
 
                 if (!TransportHelper.RenameToTempWithLock(tempPath, out fullPath))
                 {
@@ -64,6 +73,53 @@ namespace Rebus.Transport.FileSystem
             } while (loopAgain);
 
             return true;
+        }
+
+        private int _TryFillCache(string dirName, CancellationToken cancellationToken)
+        {
+            DirectoryInfo info = new DirectoryInfo(dirName);
+            // Important, ToList completes enumeration and allows to hold filesCacheLock shorter
+            var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(CACHE_SIZE).ToList();
+            int cnt = 0;
+
+            foreach (var file in files)
+            {
+                lock (this._filesCacheLock)
+                {
+                    if (!this._filesCache.Contains(file.Name))
+                    {
+                        this._filesQueue.Enqueue(file.Name);
+                        this._filesCache.Add(file.Name);
+                        ++cnt;
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return cnt;
+        }
+
+        private int _TryFillCacheDefered(string dirName, CancellationToken cancellationToken)
+        {
+            DirectoryInfo info = new DirectoryInfo(dirName);
+            var files = info.EnumerateFiles("d*.json").Where(p=> TransportHelper.GetFileDate(p.Name) <= DateTime.Now.ToUniversalTime()).OrderBy(p => p.Name).Take(CACHE_SIZE).ToList();
+            int cnt = 0;
+
+            foreach (var file in files)
+            {
+                lock (this._filesCacheLock)
+                {
+                    if (!this._filesCache.Contains(file.Name))
+                    {
+                        this._filesQueue.Enqueue(file.Name);
+                        this._filesCache.Add(file.Name);
+                        ++cnt;
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return cnt;
         }
 
         /// <summary>
@@ -89,25 +145,8 @@ namespace Rebus.Transport.FileSystem
                         if (lastNoMessage.TotalMilliseconds > BACKOFF_MSEC)
                         {
                             var dirName = _queueRegister.EnsureQueueInitialized(this._inputQueue);
-                            DirectoryInfo info = new DirectoryInfo(dirName);
-                            // Important, ToList completes enumeration and allows to hold filesCacheLock shorter
-                            var files = info.EnumerateFiles("b*.json").OrderBy(p => p.Name).Take(CACHE_SIZE).ToList();
-                            int cnt = 0;
-
-                            foreach (var file in files)
-                            {
-                                lock (this._filesCacheLock)
-                                {
-                                    if (!this._filesCache.Contains(file.Name))
-                                    {
-                                        this._filesQueue.Enqueue(file.Name);
-                                        this._filesCache.Add(file.Name);
-                                        ++cnt;
-                                    }
-                                }
-                                cancellationToken.ThrowIfCancellationRequested();
-                            }
-
+                            int cnt = this._TryFillCache(dirName, cancellationToken);
+                            cnt += _TryFillCacheDefered(dirName, cancellationToken);
 
                             if (cnt == 0)
                             {
