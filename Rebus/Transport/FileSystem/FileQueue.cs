@@ -56,7 +56,7 @@ namespace Rebus.Transport.FileSystem
                     }
                 }
 
-                if (!TransportHelper.RenameToUniqueTempName(tempPath, out fullPath))
+                if (!TransportHelper.RenameToTempWithLock(tempPath, out fullPath))
                 {
                     // this file is used by somebody else (try to get another one)
                     loopAgain = true;

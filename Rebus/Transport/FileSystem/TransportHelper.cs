@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace Rebus.Transport.FileSystem
 {
@@ -41,8 +42,6 @@ namespace Rebus.Transport.FileSystem
             }
             catch (IOException)
             {
-                // the file is gone
-                newFilePath = null;
                 return false;
             }
         }
@@ -62,36 +61,30 @@ namespace Rebus.Transport.FileSystem
         }
 
         /// <summary>
-        /// Double unique rename to secure exclusive file access (one time is not enough)
+        /// change the first letter from any to t (means temporary)
         /// </summary>
         /// <param name="fullPath"></param>
         /// <param name="newFilePath"></param>
         /// <returns></returns>
-        public static bool RenameToUniqueTempName(string fullPath, out string newFilePath)
+        public static bool RenameToTempWithLock(string fullPath, out string newFilePath)
         {
-            if (!TransportHelper._RenameToUniqueTempName(fullPath, out newFilePath))
-            {
-                return false;
-            }
-            fullPath = newFilePath;
-            if (!TransportHelper._RenameToUniqueTempName(fullPath, out newFilePath))
-            {
-                return false;
-            }
-            return true;
-        }
-
-
-        private static bool _RenameToUniqueTempName(string fullPath, out string newFilePath)
-        {
+            string dirName = Path.GetDirectoryName(fullPath);
             newFilePath = null;
             string fileName = Path.GetFileName(fullPath);
-            string newFileName = GetDerivedTempFileName(fileName);
-            if (!RenameFile(fullPath, newFileName, out newFilePath))
+            string lockFileName = $"l{fileName.Substring(1)}";
+            string lockFilePath = Path.Combine(dirName, lockFileName);
+            try
+            {
+                using (var fileLock = new FileStream(lockFilePath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None, 4096, FileOptions.DeleteOnClose))
+                {
+                    string newFileName = $"t{fileName.Substring(1)}";
+                    return RenameFile(fullPath, newFileName, out newFilePath);
+                }
+            }
+            catch (Exception)
             {
                 return false;
             }
-            return true;
         }
 
         /// <summary>
