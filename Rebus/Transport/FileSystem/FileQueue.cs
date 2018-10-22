@@ -9,8 +9,8 @@ namespace Rebus.Transport.FileSystem
 {
     class FileQueue
     {
-        const int CACHE_SIZE = 1000;
-        const int DEFER_CACHE_SIZE = 500;
+        const int CACHE_SIZE = 200;
+        const int DEFER_CACHE_SIZE = 200;
         const int BACKOFF_NOMSG_MSEC = 500;
         const int BACKOFF_DEFERED_MSEC = 5000;
         private int _accessCounter;
@@ -61,7 +61,7 @@ namespace Rebus.Transport.FileSystem
                
                
                 // Check if the file is defered (skip them if not ready for processing)
-                if (TransportHelper.GetFileUtcDate(fileName) > DateTime.Now.ToUniversalTime())
+                if (fileName.StartsWith("d") && TransportHelper.GetFileUtcDate(fileName) > DateTime.Now.ToUniversalTime())
                 {
                     loopAgain = true;
                 }
