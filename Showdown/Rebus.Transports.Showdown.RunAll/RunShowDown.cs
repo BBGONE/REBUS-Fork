@@ -15,7 +15,7 @@ namespace Rebus.Transports.Showdown
         const string FileSystemDirectory = @"c:\DATA\REBUS\QUEUES\";
         private static InMemNetwork inMemNetwork;
 
-        public static async Task Run(TransportKind transportKind, int receiversCount = 3, int readParallelism = 4, int numberOfWorkers = 10, bool isLongRun = false)
+        public static async Task Run(TransportKind transportKind, int busCount = 1, int readParallelism = 4, int numberOfWorkers = 10, bool isLongRun = false)
         {
             int messageCount = _GetMeassageCount(transportKind);
 
@@ -29,7 +29,7 @@ namespace Rebus.Transports.Showdown
             }
 
             await _SendMessages(transportKind, messageCount);
-            await _ReceiveMessages(transportKind, receiversCount, readParallelism, numberOfWorkers, messageCount, isLongRun);
+            await _ReceiveMessages(transportKind, busCount, readParallelism, numberOfWorkers, messageCount, isLongRun);
         }
 
         static async Task _SendMessages(TransportKind transportKind, int messageCount)
@@ -42,14 +42,14 @@ namespace Rebus.Transports.Showdown
             }
         }
 
-        static async Task _ReceiveMessages(TransportKind transportKind, int receiversCount, int readParallelism, int numberOfWorkers, int messageCountToReceive, bool isLongRun)
+        static async Task _ReceiveMessages(TransportKind transportKind, int busCount, int readParallelism, int numberOfWorkers, int messageCountToReceive, bool isLongRun)
         {
             Action<IHandlerActivator> configureReceiverAdapter = _GetConfigureAdapterCallBack(transportKind, readParallelism, 0);
             MessageReceiver.totalReceivedCount = 0;
-            MessageReceiver[] messageReceivers = new MessageReceiver[receiversCount];
-            Task[] receiveTasks = new Task[receiversCount];
+            MessageReceiver[] messageReceivers = new MessageReceiver[busCount];
+            Task[] receiveTasks = new Task[busCount];
             var tcs = new TaskCompletionSource<bool>();
-            for (int i = 0; i < receiversCount; ++i)
+            for (int i = 0; i < busCount; ++i)
             {
                 string name = $"{transportKind}:#{i + 1}";
                 messageReceivers[i] = new MessageReceiver(name, configure: configureReceiverAdapter,
@@ -61,7 +61,7 @@ namespace Rebus.Transports.Showdown
 
             try
             {
-                for (int i = 0; i < receiversCount; ++i)
+                for (int i = 0; i < busCount; ++i)
                 {
                     receiveTasks[i] = messageReceivers[i].Receive();
                 }
@@ -72,7 +72,7 @@ namespace Rebus.Transports.Showdown
             finally
             {
 
-                for (int i = 0; i < receiversCount; ++i)
+                for (int i = 0; i < busCount; ++i)
                 {
                     try
                     {
