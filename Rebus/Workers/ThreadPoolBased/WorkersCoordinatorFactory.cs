@@ -42,7 +42,7 @@ namespace Rebus.Workers.ThreadPoolBased
             _busGetter = busGetter;
             _backoffStrategy = backoffStrategy;
             _log = _rebusLoggerFactory.GetLogger<WorkersCoordinatorFactory>();
-
+         
             if (_options.MaxReadParallelism < 1)
             {
                 throw new ArgumentException($"Max read parallelism is {_options.MaxReadParallelism} which is an invalid value");

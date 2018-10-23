@@ -72,7 +72,7 @@ namespace Rebus.Transport.FileSystem
             }
             string tempFileName = $"t{fileName.Substring(1)}";
             string tempFilePath = Path.Combine(destinationDirectory, tempFileName);
-
+           
             context.OnCommitted(async () =>
             {
                 // new file in async mode
