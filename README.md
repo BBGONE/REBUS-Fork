@@ -7,19 +7,28 @@ Also it uses only one task when idle to monitor the queue for new messages inste
 The main reason to create this patch was to relieve the stress from the queue by constant polling it by multiple workers.
 It has the built-in autoscaling ability.
 <br/>
-Also in the original Rebus the FileSystemTransport is very unoptimized (exceptionally slow) and can not be really used in existent projects.
-I have made the optimisations so it perfoms at 20 times of the original
+Also in the original Rebus the FileSystemTransport is very unoptimized (exceptionally slow) and can not be used in real world projects.
+I have made the optimisations so it perfoms at 20 times of the original. 
+The FileSystemTransport now supports receiving using several buses from the same queue.
+Also it supports defer sends now.
 <br/>
-Also it is better to cap the read parallelism (threads reading from the queue concurrently).
+Also it is better to cap the read parallelism (threads reading messages from the queue concurrently).
 <br/>
-In the original Rebus implementation there's
-the ParallelOperationsManager which caps overall parallelism (message processing as well, not only reading from the queue), also
-transports use AsyncBottleneck which caps overall access to the transport (not only the current queue).
+In the original Rebus implementation there's the ParallelOperationsManager which caps the overall parallelism 
+(message processing as well, not only reading from the queue), 
+and transports use AsyncBottleneck which caps overall access to the transport (not only the current queue).
 <br/>
 These caps are too broad. In my patch i introduced MaxReadParallelism instead of MaxParallelism (it was removed).
 The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
 <br> 
-So it is enough to operate with MaxReadParallelism (4 by default), and the number of the workers (which is really, just the maximum number of tasks that can be launched).
+The bus starts it work by creating only one TPL task which waits for the messages in the queue.
+When the TPL tasks receives the message it starts a new TPL task which in its turn waits for the messages.
+The first TPL tasks processes the message and tries to receive the next one. If there are no messages then
+the tasks ends its work and is removed. The total number of the tasks is capped by the MaxParallelism,
+but when no messages in the queue, only one task is remained to wait for the messages.
+<br> 
+So in this implementation it is enough to operate with MaxReadParallelism (4 by default), 
+and the number of the workers (which is really, is the maximum number of tasks that can be launched concurrently).
 <br/>
 <br/>
 P.S.: 
