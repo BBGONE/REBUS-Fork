@@ -7,10 +7,10 @@ Also it uses only one task when idle to monitor the queue for new messages inste
 The main reason to create this patch was to relieve the stress from the queue by constant polling it by multiple workers.
 It has the built-in autoscaling ability.
 <br/>
-Also in the original Rebus the FileSystemTransport is very unoptimized (exceptionally slow) and can not be used in real world projects.
-I have made the optimisations so it perfoms at 20 times of the original. 
-The FileSystemTransport now supports receiving using several buses from the same queue.
-Also it supports defer sends now.
+Also in the original Rebus the FileSystemTransport is very unoptimized.
+I have made the optimizations so it perfoms at 10 times of the original. 
+The FileSystemTransport now supports receiving messages using several buses from the same queue
+and it supports defered sends now.
 <br/>
 Also it is better to cap the read parallelism (threads reading messages from the queue concurrently).
 <br/>
@@ -21,7 +21,7 @@ and transports use AsyncBottleneck which caps overall access to the transport (n
 These caps are too broad. In my patch i introduced MaxReadParallelism instead of MaxParallelism (it was removed).
 The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
 <br> 
-The bus starts it work by creating only one TPL task which waits for the messages in the queue.
+The bus starts its work by creating only one TPL task which waits for the messages in the queue.
 When the TPL task receives the message it starts a new TPL task which in its turn waits for the messages.
 The first TPL tasks processes the message and tries to receive the next one. If there are no messages then
 the tasks ends its work and is removed. The total number of the tasks is capped by the MaxParallelism,
