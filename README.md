@@ -22,7 +22,7 @@ These caps are too broad. In my patch i introduced MaxReadParallelism instead of
 The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
 <br> 
 The bus starts it work by creating only one TPL task which waits for the messages in the queue.
-When the TPL tasks receives the message it starts a new TPL task which in its turn waits for the messages.
+When the TPL task receives the message it starts a new TPL task which in its turn waits for the messages.
 The first TPL tasks processes the message and tries to receive the next one. If there are no messages then
 the tasks ends its work and is removed. The total number of the tasks is capped by the MaxParallelism,
 but when no messages in the queue, only one task is remained to wait for the messages.
