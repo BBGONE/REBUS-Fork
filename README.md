@@ -12,7 +12,6 @@ I have made the optimizations so it perfoms at 10 times of the original.
 The FileSystemTransport now supports receiving messages using several buses from the same queue
 and it supports defered sends now.
 <br/>
-Also it is better to cap the read parallelism (threads reading messages from the queue concurrently).
 <br/>
 In the original Rebus implementation there's the ParallelOperationsManager which caps the overall parallelism 
 (message processing as well, not only reading from the queue), 
@@ -32,14 +31,5 @@ and the number of the workers (which is really, is the maximum number of tasks t
 <br/>
 <br/>
 P.S.: 
-For demo purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. You need to update the sql connection string in
-the Rebus.Transports.Showdown.SqlServer projects.
-<br/>
-If you want to see the real performance, then <b>don't run in Visual Studio (or run without debug)</b> because the results are dramatically different
-from what when you will try to run with debugging. 
-For example, on my comp sending to the queue is 2500 msgs/ sec, but when run in Visual Studio it was 690 msgs/ sec.
-<br/>And the recieve results were also very different.
-<br/>You can compare it with the original Rebus performance if you reference the original nuget Rebus5 package in the projects instead of the patched Rebus in the solution.
-<br/><b>One thing to mention</b>: the tests in the Rebus usually use InMemoryTransport but it's a faulty approach because it uses the synchronous queue which is almost devoid of latency
-and read contention. For more real world results use transports which are async in nature (like the Sql Server Transport) and have a read contention to the same queue
-(this can be, File IO, Network IO, any real world queue).
+For testing purposes i modified the <b>Rebus.Transports.Showdown</b> sample to run it with the patched Rebus. 
+You need to update the sql connection string in the Rebus.Transports.Showdown.RunAll project.
