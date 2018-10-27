@@ -18,12 +18,12 @@ In the original Rebus implementation there's the ParallelOperationsManager which
 and transports use AsyncBottleneck which caps overall access to the transport (not only the current queue).
 <br/>
 These caps are too broad. In my patch i introduced MaxReadParallelism instead of MaxParallelism (it was removed).
-The MaxParallelism is the number of Workers (and they are really the TPL tasks, not plain threads).
+The NumberOfWorkers is the maximum number of running TPL tasks, not plain threads.
 <br/> 
 The bus starts its work by creating only one TPL task which waits for the messages in the queue.
 When the TPL task receives the message it starts a new TPL task which in its turn waits for the messages.
 The first TPL tasks processes the message and tries to receive the next one. If there are no messages then
-the tasks ends its work and is removed. The total number of the tasks is capped by the MaxParallelism,
+the tasks ends its work and is removed. The total number of the tasks is capped by the NumberOfWorkers,
 but when no messages in the queue, only one task is remained to wait for the messages.
 <br/>
 For example (tested on InMemoryTransport), in my implementation when idle (no messages) - no matter how many workers configured, it is 9,1 queue reads per second.
