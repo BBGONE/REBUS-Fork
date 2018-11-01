@@ -12,7 +12,7 @@ namespace Rebus.Transports.Showdown
     {
         const string QueueName = "test_showdown";
         const string SqlServerConnectionString = "Data Source=.;Initial Catalog=rebus2_test;Integrated Security=True;Connection Timeout=5";
-        const string FileSystemDirectory = @"c:\DATA\TEMP\REBUS\QUEUES\";
+        const string FileSystemDirectory = @"c:\DATA\REBUS\QUEUES\";
         private static InMemNetwork inMemNetwork;
 
         public static async Task Run(TransportKind transportKind, int busCount = 1, int readParallelism = 4, int numberOfWorkers = 10, bool isLongRun = false)
