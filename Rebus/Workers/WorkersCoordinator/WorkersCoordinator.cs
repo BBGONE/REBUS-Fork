@@ -38,10 +38,8 @@ namespace Rebus.TasksCoordinator
               )
         {
             this.Log = rebusLoggerFactory.GetLogger<WorkersCoordinator>();
-            if (maxReadParallelism < 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(maxReadParallelism));
-            }
+            // the current PrimaryReader does not use BottleNeck hence: maxReadParallelism - 1
+            int throttleCount = Math.Max(maxReadParallelism - 1, 1);
             this._name = name;
             this._stoppingTask = null;
             this._tasksCanBeStarted = 0;
@@ -52,8 +50,7 @@ namespace Rebus.TasksCoordinator
             this._taskIdSeq = 0;
             this._tasks = new ConcurrentDictionary<long, Task>();
             this._isStarted = 0;
-            // the current PrimaryReader does not use BottleNeck hence: maxReadParallelism - 1
-            this._readBottleNeck = new Bottleneck(maxReadParallelism - 1);
+            this._readBottleNeck = new Bottleneck(throttleCount);
             this._shutdownTimeout = shutdownTimeout;
         }
 
