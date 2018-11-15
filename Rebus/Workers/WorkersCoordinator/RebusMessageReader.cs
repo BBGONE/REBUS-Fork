@@ -82,7 +82,7 @@ namespace Rebus.TasksCoordinator
             int cnt = 0;
             TransportMessage message = null;
             TransactionContext context;
-            var disposable = await this.Coordinator.WaitReadAsync();
+            var disposable = this.Coordinator.ReadThrottle(isPrimaryReader);
             try
             {
                 context = new TransactionContextWithOwningBus(_owningBus);
@@ -116,8 +116,6 @@ namespace Rebus.TasksCoordinator
 
                     return 0;
                 }
-
-                // Console.WriteLine($"TaskID: {taskId} {IsPrimaryReader} THREAD:{Thread.CurrentThread.ManagedThreadId} TasksCount:{this.Coordinator.TasksCount}");
 
                 _backoffStrategy.Reset();
 

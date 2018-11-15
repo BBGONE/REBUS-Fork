@@ -27,7 +27,7 @@ namespace Rebus.TasksCoordinator
         private volatile IMessageReader _primaryReader;
         private readonly string _name;
         private Task _stoppingTask;
-        private readonly AsyncBottleneck _readBottleNeck;
+        private readonly Bottleneck _readBottleNeck;
         private readonly int _shutdownTimeout;
 
         public WorkersCoordinator(string name, int maxWorkersCount,
@@ -38,6 +38,10 @@ namespace Rebus.TasksCoordinator
               )
         {
             this.Log = rebusLoggerFactory.GetLogger<WorkersCoordinator>();
+            if (maxReadParallelism < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxReadParallelism));
+            }
             this._name = name;
             this._stoppingTask = null;
             this._tasksCanBeStarted = 0;
@@ -48,7 +52,8 @@ namespace Rebus.TasksCoordinator
             this._taskIdSeq = 0;
             this._tasks = new ConcurrentDictionary<long, Task>();
             this._isStarted = 0;
-            this._readBottleNeck = new AsyncBottleneck(maxReadParallelism);
+            // the current PrimaryReader does not use BottleNeck hence: maxReadParallelism - 1
+            this._readBottleNeck = new Bottleneck(maxReadParallelism - 1);
             this._shutdownTimeout = shutdownTimeout;
         }
 
@@ -285,9 +290,29 @@ namespace Rebus.TasksCoordinator
             Interlocked.CompareExchange(ref this._primaryReader, reader, null);
         }
 
-        async Task<IDisposable> ITaskCoordinatorAdvanced.WaitReadAsync()
+
+        struct DummyReleaser : IDisposable
         {
-            return await this._readBottleNeck.Enter(this._stopTokenSource.Token);
+            public static IDisposable Instance = new DummyReleaser();
+
+            public void Dispose()
+            {
+                // NOOP
+            }
+        }
+
+        async Task<IDisposable> ITaskCoordinatorAdvanced.ReadThrottleAsync(bool isPrimaryReader)
+        {
+            if (isPrimaryReader)
+                return DummyReleaser.Instance;
+            return await this._readBottleNeck.EnterAsync(this._stopTokenSource.Token);
+        }
+
+        IDisposable ITaskCoordinatorAdvanced.ReadThrottle(bool isPrimaryReader)
+        {
+            if (isPrimaryReader)
+                return DummyReleaser.Instance;
+            return this._readBottleNeck.Enter(this._stopTokenSource.Token);
         }
         #endregion
 
