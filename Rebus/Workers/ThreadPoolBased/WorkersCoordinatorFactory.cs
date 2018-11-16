@@ -57,7 +57,7 @@ namespace Rebus.Workers.ThreadPoolBased
         /// <summary>
         /// Creates a new workersCoordinator with the given <paramref name="name"/>
         /// </summary>
-        public IWorkersCoordinator CreateWorkerCoordinator(string name, int desiredNumberOfWorkers)
+        public IWorkersCoordinator CreateWorkersCoordinator(string name, int desiredNumberOfWorkers)
         {
             if (name == null) throw new ArgumentNullException(nameof(name));
 
@@ -69,7 +69,8 @@ namespace Rebus.Workers.ThreadPoolBased
                 messageReaderFactory: readerFactory, 
                 rebusLoggerFactory: _rebusLoggerFactory, 
                 maxReadParallelism: this._options.MaxReadParallelism,
-                shutdownTimeout: (int)Convert.ChangeType(this._options.WorkerShutdownTimeout.TotalMilliseconds, typeof(int))
+                asyncReadThrottling: this._options.AsyncReadThrottling,
+                shutdownTimeout: this._options.WorkerShutdownTimeout
                 );
             coordinator.Start();
             return coordinator;

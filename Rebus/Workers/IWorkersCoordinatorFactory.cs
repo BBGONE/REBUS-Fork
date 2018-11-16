@@ -5,6 +5,6 @@
     /// </summary>
     public interface IWorkersCoordinatorFactory
     {
-        IWorkersCoordinator CreateWorkerCoordinator(string name, int desiredNumberOfWorkers);
+        IWorkersCoordinator CreateWorkersCoordinator(string name, int desiredNumberOfWorkers);
     }
 }

@@ -27,14 +27,16 @@ namespace Rebus.TasksCoordinator
         private volatile IMessageReader _primaryReader;
         private readonly string _name;
         private Task _stoppingTask;
-        private readonly Bottleneck _readBottleNeck;
-        private readonly int _shutdownTimeout;
+        private readonly Bottleneck _readThrottling;
+        private readonly bool _asyncReadThrottling;
+        private readonly TimeSpan _shutdownTimeout;
 
         public WorkersCoordinator(string name, int maxWorkersCount,
               IMessageReaderFactory messageReaderFactory,
               IRebusLoggerFactory rebusLoggerFactory,
               int maxReadParallelism = 4,
-              int shutdownTimeout = STOP_TIMEOUT_MSec
+              bool asyncReadThrottling = false,
+              TimeSpan? shutdownTimeout = null
               )
         {
             this.Log = rebusLoggerFactory.GetLogger<WorkersCoordinator>();
@@ -50,8 +52,9 @@ namespace Rebus.TasksCoordinator
             this._taskIdSeq = 0;
             this._tasks = new ConcurrentDictionary<long, Task>();
             this._isStarted = 0;
-            this._readBottleNeck = new Bottleneck(throttleCount);
-            this._shutdownTimeout = shutdownTimeout;
+            this._asyncReadThrottling = asyncReadThrottling;
+            this._readThrottling = new Bottleneck(throttleCount);
+            this._shutdownTimeout = shutdownTimeout ?? TimeSpan.FromMilliseconds(STOP_TIMEOUT_MSec);
         }
 
         public bool Start()
@@ -302,14 +305,14 @@ namespace Rebus.TasksCoordinator
         {
             if (isPrimaryReader)
                 return DummyReleaser.Instance;
-            return await this._readBottleNeck.EnterAsync(this._stopTokenSource.Token);
+            return await this._readThrottling.EnterAsync(this._stopTokenSource.Token);
         }
 
         IDisposable ITaskCoordinatorAdvanced.ReadThrottle(bool isPrimaryReader)
         {
             if (isPrimaryReader)
                 return DummyReleaser.Instance;
-            return this._readBottleNeck.Enter(this._stopTokenSource.Token);
+            return this._readThrottling.Enter(this._stopTokenSource.Token);
         }
         #endregion
 
@@ -354,6 +357,14 @@ namespace Rebus.TasksCoordinator
             set { this._isPaused = value; }
         }
 
-        public CancellationToken Token { get => _stopTokenSource == null ? CancellationToken.None : _stopTokenSource.Token; }
+        public CancellationToken Token
+        {
+            get { return _stopTokenSource == null ? CancellationToken.None : _stopTokenSource.Token; }
+        }
+
+        public bool AsyncReadThrottling
+        {
+            get { return _asyncReadThrottling; }
+        }
     }
 }

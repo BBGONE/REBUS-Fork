@@ -18,6 +18,11 @@ namespace Rebus.Config
         public const int DefaultMaxReadParallelism = 4;
 
         /// <summary>
+        /// This is the default setting of throttling concurrent read operations on the queue (async or sync), unless <see cref="AsyncReadThrottling"/> is set to something else
+        /// </summary>
+        public const bool DefaultAsyncReadThrottling = true;
+
+        /// <summary>
         /// This is the default timeout for workers to finish running active handlers, unless <see cref="WorkerShutdownTimeout" /> is set to something else.
         /// </summary>
         /// <value>1 minute per default.</value>
@@ -37,6 +42,7 @@ namespace Rebus.Config
             MaxReadParallelism = DefaultMaxReadParallelism;
             DueTimeoutsPollInterval = DefaultDueTimeoutsPollInterval;
             WorkerShutdownTimeout = DefaultWorkerShutdownTimeout;
+            AsyncReadThrottling = DefaultAsyncReadThrottling;
         }
 
         /// <summary>
@@ -48,6 +54,11 @@ namespace Rebus.Config
         /// Configures the maximum parallelism of reading queue allowed.
         /// </summary>
         public int MaxReadParallelism { get; set; }
+
+        /// <summary>
+        /// Configures if the throttling of concurrent reading from the queue asynchronous.
+        /// </summary>
+        public bool AsyncReadThrottling { get; set; }
 
         /// <summary>
         /// Gets/sets the address to use if an external timeout manager is to be used

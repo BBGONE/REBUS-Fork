@@ -82,7 +82,19 @@ namespace Rebus.TasksCoordinator
             int cnt = 0;
             TransportMessage message = null;
             TransactionContext context;
-            var disposable = this.Coordinator.ReadThrottle(isPrimaryReader);
+            IDisposable disposable = null;
+
+            if (this.Coordinator.AsyncReadThrottling)
+            {
+                // better when the reads are slow like from SqlServerTransport
+                disposable = await this.Coordinator.ReadThrottleAsync(isPrimaryReader);
+            }
+            else
+            {
+                // better when the reads are fast like from InMemoryTransport
+                disposable = this.Coordinator.ReadThrottle(isPrimaryReader);
+            }
+
             try
             {
                 context = new TransactionContextWithOwningBus(_owningBus);

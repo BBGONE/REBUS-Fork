@@ -55,6 +55,15 @@ namespace Rebus.Config
             _options.MaxReadParallelism = maxReadParallelism;
         }
 
+
+        /// <summary>
+        /// Configures if the throttling of concurrent reading from the queue asynchronous.
+        /// </summary>
+        public void SetAsyncReadThrottling(bool asyncReadThrottling)
+        {
+            _options.AsyncReadThrottling = asyncReadThrottling;
+        }
+
         /// <summary>
         /// Configures the maximum timeout for workers to finish running active handlers after being signaled to stop.
         /// </summary>

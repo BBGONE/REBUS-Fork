@@ -62,7 +62,7 @@ namespace Rebus.Bus
             var defaultBusName = $"Rebus {Interlocked.Increment(ref _busIdCounter)}";
             
             _busName = options.OptionalBusName ?? defaultBusName;
-            _workers = new Lazy<IWorkersCoordinator>(() => _workerFactory.CreateWorkerCoordinator("RebusBus WorkersCoordinator", 0), true);
+            _workers = new Lazy<IWorkersCoordinator>(() => _workerFactory.CreateWorkersCoordinator("RebusBus WorkersCoordinator", 0), true);
         }
 
         /// <summary>

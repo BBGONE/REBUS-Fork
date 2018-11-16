@@ -13,5 +13,6 @@ namespace Rebus.TasksCoordinator.Interface
         void OnAfterDoWork(IMessageReader reader);
         Task<IDisposable> ReadThrottleAsync(bool isPrimaryReader);
         IDisposable ReadThrottle(bool isPrimaryReader);
+        bool AsyncReadThrottling { get; }
     }
 }

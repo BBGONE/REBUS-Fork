@@ -109,11 +109,16 @@ namespace Rebus.Transports.Showdown
                    }
                });
 
+               bool isFastQueueReads = TransportKind.InMemory == transportKind;
+
                rebusConfigurer.Options(o =>
-                {
-                    o.SetNumberOfWorkers(numberOfWorkers);
-                    o.SetMaxReadParallelism(readParallelism);
-                });
+               {
+                   o.SetNumberOfWorkers(numberOfWorkers);
+                   o.SetMaxReadParallelism(readParallelism);
+                   // if reading message from the queue is fast then it is better to use synchronous throttling
+                   // otherwise - asynchronous is better
+                   o.SetAsyncReadThrottling(!isFastQueueReads);
+               });
 
                rebusConfigurer.Start();
             };
