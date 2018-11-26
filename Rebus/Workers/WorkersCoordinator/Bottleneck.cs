@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Rebus.TasksCoordinator.Interface;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,19 +18,24 @@ namespace Rebus.TasksCoordinator
             return new Releaser(_semaphore);
         }
 
-        public IDisposable Enter(CancellationToken cancellationToken)
+        public IWaitResult Enter(CancellationToken cancellationToken, int timeout = 50)
         {
-            _semaphore.Wait(100, cancellationToken);
+            bool res = _semaphore.Wait(timeout, cancellationToken);
 
-            return new Releaser(_semaphore);
+            return new Releaser(_semaphore, res);
         }
 
-        class Releaser : IDisposable
+        class Releaser : IWaitResult
         {
             readonly SemaphoreSlim _semaphore;
 
-            public Releaser(SemaphoreSlim semaphore) => _semaphore = semaphore;
+            public Releaser(SemaphoreSlim semaphore, bool waitResult = true)
+            {
+                _semaphore = semaphore;
+                Result = waitResult;
+            }
 
+            public bool Result { get; }
             public void Dispose() => _semaphore.Release();
         }
     }

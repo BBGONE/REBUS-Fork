@@ -291,14 +291,16 @@ namespace Rebus.TasksCoordinator
         }
 
 
-        struct DummyReleaser : IDisposable
+        struct DummyReleaser : IWaitResult
         {
-            public static IDisposable Instance = new DummyReleaser();
+            public static IWaitResult Instance = new DummyReleaser();
 
             public void Dispose()
             {
                 // NOOP
             }
+
+            public bool Result { get { return true; } }
         }
 
         async Task<IDisposable> ITaskCoordinatorAdvanced.ReadThrottleAsync(bool isPrimaryReader)
@@ -308,7 +310,7 @@ namespace Rebus.TasksCoordinator
             return await this._readThrottling.EnterAsync(this._stopTokenSource.Token);
         }
 
-        IDisposable ITaskCoordinatorAdvanced.ReadThrottle(bool isPrimaryReader)
+        IWaitResult ITaskCoordinatorAdvanced.ReadThrottle(bool isPrimaryReader)
         {
             if (isPrimaryReader)
                 return DummyReleaser.Instance;

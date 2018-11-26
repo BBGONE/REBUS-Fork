@@ -91,12 +91,23 @@ namespace Rebus.TasksCoordinator
             }
             else
             {
-                // better when the reads are fast like from InMemoryTransport
-                disposable = this.Coordinator.ReadThrottle(isPrimaryReader);
+                // synchronous is better when the reads are fast like from the InMemoryTransport
+                var waitResult = this.Coordinator.ReadThrottle(isPrimaryReader);
+                // if synchronous waiting resulted in timeout (50 milliseconds by default) then wait asynchronously
+                if (!waitResult.Result && !token.IsCancellationRequested)
+                {
+                    disposable = await this.Coordinator.ReadThrottleAsync(isPrimaryReader);
+                }
+                else
+                {
+                    disposable = waitResult;
+                }
             }
+
 
             try
             {
+                token.ThrowIfCancellationRequested();
                 context = new TransactionContextWithOwningBus(_owningBus);
             }
             catch
