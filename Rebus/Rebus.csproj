@@ -75,4 +75,7 @@
     <Reference Include="System.Core" />
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Testing\" />
+  </ItemGroup>
 </Project>

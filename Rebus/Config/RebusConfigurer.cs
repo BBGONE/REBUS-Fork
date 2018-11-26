@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using Rebus.Activation;
+﻿using Rebus.Activation;
 using Rebus.Bus;
 using Rebus.Compression;
-using Rebus.DataBus;
 using Rebus.Handlers;
 using Rebus.Injection;
 using Rebus.Logging;
@@ -17,22 +11,25 @@ using Rebus.Pipeline.Receive;
 using Rebus.Pipeline.Send;
 using Rebus.Retry;
 using Rebus.Retry.ErrorTracking;
+using Rebus.Retry.FailFast;
 using Rebus.Retry.PoisonQueues;
 using Rebus.Retry.Simple;
 using Rebus.Routing;
 using Rebus.Routing.TypeBased;
-using Rebus.Sagas;
 using Rebus.Serialization;
 using Rebus.Serialization.Json;
 using Rebus.Subscriptions;
 using Rebus.Threading;
 using Rebus.Threading.TaskParallelLibrary;
 using Rebus.Timeouts;
+using Rebus.Topic;
 using Rebus.Transport;
 using Rebus.Workers;
 using Rebus.Workers.ThreadPoolBased;
-using Rebus.Retry.FailFast;
-using Rebus.Topic;
+using System;
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Threading;
 
 // ReSharper disable EmptyGeneralCatchClause
 
@@ -87,16 +84,6 @@ namespace Rebus.Config
         {
             if (configurer == null) throw new ArgumentNullException(nameof(configurer));
             configurer(new StandardConfigurer<IRouter>(_injectionist, _options));
-            return this;
-        }
-
-        /// <summary>
-        /// Configures how Rebus persists saga data by allowing for choosing which implementation of <see cref="ISagaStorage"/> to use
-        /// </summary>
-        public RebusConfigurer Sagas(Action<StandardConfigurer<ISagaStorage>> configurer)
-        {
-            if (configurer == null) throw new ArgumentNullException(nameof(configurer));
-            configurer(new StandardConfigurer<ISagaStorage>(_injectionist, _options));
             return this;
         }
 
@@ -179,8 +166,6 @@ namespace Rebus.Config
             });
 
             PossiblyRegisterDefault<ISubscriptionStorage>(c => new DisabledSubscriptionStorage());
-
-            PossiblyRegisterDefault<ISagaStorage>(c => new DisabledSagaStorage());
 
             PossiblyRegisterDefault<ITimeoutManager>(c => new DisabledTimeoutManager());
 
@@ -270,7 +255,6 @@ namespace Rebus.Config
                     .OnReceive(new DeserializeIncomingMessageStep(serializer))
                     .OnReceive(new HandleRoutingSlipsStep(transport, serializer))
                     .OnReceive(new ActivateHandlersStep(c.Get<IHandlerActivator>()))
-                    .OnReceive(new LoadSagaDataStep(c.Get<ISagaStorage>(), rebusLoggerFactory))
                     .OnReceive(new DispatchIncomingMessageStep(rebusLoggerFactory))
 
                     .OnSend(new AssignDefaultHeadersStep(transport))
@@ -284,8 +268,6 @@ namespace Rebus.Config
             RegisterDecorator<IPipeline>(c => new PipelineCache(c.Get<IPipeline>()));
 
             PossiblyRegisterDefault(c => new BusLifetimeEvents());
-
-            PossiblyRegisterDefault<IDataBus>(c => new DisabledDataBus());
 
             PossiblyRegisterDefault<ITopicNameConvention>(c => new DefaultTopicNameConvention());
 
@@ -301,7 +283,6 @@ namespace Rebus.Config
                 _options,
                 c.Get<IRebusLoggerFactory>(),
                 c.Get<BusLifetimeEvents>(),
-                c.Get<IDataBus>(),
                 c.Get<ITopicNameConvention>()));
 
             // since an error during resolution does not give access to disposable instances, we need to do this

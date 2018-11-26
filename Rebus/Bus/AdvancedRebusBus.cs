@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Rebus.Bus.Advanced;
-using Rebus.DataBus;
 using Rebus.Extensions;
 using Rebus.Messages;
 using Rebus.Pipeline;
@@ -35,8 +34,6 @@ namespace Rebus.Bus
             public IRoutingApi Routing => new RoutingApi(_rebusBus);
 
             public ITransportMessageApi TransportMessage => new TransportMessageApi(_rebusBus);
-
-            public IDataBus DataBus => _rebusBus._dataBus;
 
             public ISyncBus SyncBus => new SyncApi(_rebusBus);
         }

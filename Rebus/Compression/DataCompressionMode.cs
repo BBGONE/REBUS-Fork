@@ -1,6 +1,4 @@
-﻿using Rebus.DataBus;
-
-namespace Rebus.Compression
+﻿namespace Rebus.Compression
 {
     /// <summary>
     /// Enumerates strategies for when the data bus storage decorator GZIps the data

@@ -1,12 +1,8 @@
+using Rebus.Handlers;
+using Rebus.Transport;
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Threading.Tasks;
-using Rebus.Exceptions;
-using Rebus.Extensions;
-using Rebus.Handlers;
-using Rebus.Sagas;
-using Rebus.Transport;
 // ReSharper disable UnusedTypeParameter
 
 namespace Rebus.Pipeline.Receive
@@ -18,30 +14,7 @@ namespace Rebus.Pipeline.Receive
     {        
         static readonly ConcurrentDictionary<string, bool> CanBeInitiatedByCache = new ConcurrentDictionary<string, bool>();
 
-        /// <summary>
-        /// Gets whether a message of the given type is allowed to cause a new saga data instance to be created
-        /// </summary>
-        public bool CanBeInitiatedBy(Type messageType)
-        {
-            // checks if IAmInitiatedBy<TMessage> is implemented by the saga
-            return CanBeInitiatedByCache
-                .GetOrAdd($"{Handler.GetType().FullName}::{messageType.FullName}", _ =>
-                {
-                    var implementedInterfaces = Saga.GetType().GetInterfaces();
-
-                    var handlerTypesToLookFor = new[] { messageType }.Concat(messageType.GetBaseTypes())
-                        .Select(baseType => typeof(IAmInitiatedBy<>).MakeGenericType(baseType));
-
-                    return implementedInterfaces.Intersect(handlerTypesToLookFor).Any();
-                });
-        }
-
-        /// <summary>
-        /// Cached setter methods that "mount" a saga data instance on a handler (which is assumed to have a <code>Data</code> property, like <see cref="Saga"/>
-        /// </summary>
-        protected static readonly ConcurrentDictionary<Type, Action<object, ISagaData>> SagaDataSetters = new ConcurrentDictionary<Type, Action<object, ISagaData>>();
-
-        /// <summary>
+           /// <summary>
         /// Key under which the handler invoker will stash itself in the <see cref="ITransactionContext.Items"/>
         /// during the invocation of the wrapped handler
         /// </summary>
@@ -51,26 +24,6 @@ namespace Rebus.Pipeline.Receive
         /// Method to call in order to invoke this particular handler
         /// </summary>
         public abstract Task Invoke();
-
-        /// <summary>
-        /// Gets whether this invoker's handler is a saga
-        /// </summary>
-        public abstract bool HasSaga { get; }
-
-        /// <summary>
-        /// Gets this invoker's handler as a saga (throws if it's not a saga)
-        /// </summary>
-        public abstract Saga Saga { get; }
-
-        /// <summary>
-        /// Adds to the invoker a piece of saga data that has been determined to be relevant for the invocation
-        /// </summary>
-        public abstract void SetSagaData(ISagaData sagaData);
-
-        /// <summary>
-        /// Gets from the invoker the piece of saga data that has been determined to be relevant for the invocation, returning null if no such saga data has been set
-        /// </summary>
-        public abstract ISagaData GetSagaData();
 
         /// <summary>
         /// Marks this handler as one to skip, i.e. calling this method will make the invoker ignore the call to <see cref="Invoke"/>
@@ -97,7 +50,6 @@ namespace Rebus.Pipeline.Receive
         readonly Func<Task> _action;
         readonly object _handler;
         readonly ITransactionContext _transactionContext;
-        ISagaData _sagaData;
         bool _invokeHandler = true;
 
         /// <summary>
@@ -119,27 +71,6 @@ namespace Rebus.Pipeline.Receive
 	    /// <inheritdoc />
 	    public override bool WillBeInvoked => _invokeHandler;
 
-	    /// <summary>
-        /// Gets whther the contained handler object has a saga
-        /// </summary>
-        public override bool HasSaga => _handler is Saga;
-
-        /// <summary>
-        /// If <see cref="HasSaga"/> returned true, the <see cref="Handler"/> can be retrieved as a <see cref="Saga"/> here
-        /// </summary>
-        public override Saga Saga
-        {
-            get
-            {
-                if (!HasSaga)
-                {
-                    throw new InvalidOperationException($"Attempted to get {_handler} as saga, it's not a saga!");
-                }
-
-                return (Saga)_handler;
-            }
-        }
-
         /// <summary>
         /// Invokes the handler within this handler invoker
         /// </summary>
@@ -158,45 +89,6 @@ namespace Rebus.Pipeline.Receive
                 _transactionContext.Items.TryRemove(CurrentHandlerInvokerItemsKey, out _);
             }
         }
-
-        const string SagaDataPropertyName = nameof(Saga<ConcreteSagaData>.Data); //< for refactoring tools to better see it
-
-        // ReSharper disable once ClassNeverInstantiated.Local
-        class ConcreteSagaData : SagaData { } //< in order to be able to declare the const above
-
-        /// <summary>
-        /// Sets a saga instance on the handler
-        /// </summary>
-        public override void SetSagaData(ISagaData sagaData)
-        {
-            if (!HasSaga)
-            {
-                throw new InvalidOperationException($"Attempted to set {sagaData} as saga data on handler {_handler}, but the handler is not a saga!");
-            }
-
-            var setter = SagaDataSetters.GetOrAdd(_handler.GetType(), type =>
-            {
-                var dataProperty = _handler.GetType().GetProperty(SagaDataPropertyName);
-
-                if (dataProperty == null)
-                {
-                    throw new RebusApplicationException(
-                        $"Could not find the '{SagaDataPropertyName}' property on {_handler}...");
-                }
-
-                return (handler, data) => dataProperty.SetValue(handler, data);
-            });
-
-            setter(_handler, sagaData);
-
-            _sagaData = sagaData;
-        }
-
-        /// <summary>
-        /// Gets the saga data (if any) that was previously set with <see cref="SetSagaData"/>. Returns null
-        /// if none has been set
-        /// </summary>
-        public override ISagaData GetSagaData() => _sagaData;
 
         /// <summary>
         /// Marks this handler invoker to skip its invocation, causing it to do nothin when <see cref="Invoke"/> is called

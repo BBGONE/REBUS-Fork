@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Rebus.Bus.Advanced;
+﻿using Rebus.Bus.Advanced;
 using Rebus.Config;
-using Rebus.DataBus;
 using Rebus.Exceptions;
 using Rebus.Extensions;
 using Rebus.Logging;
@@ -19,6 +13,10 @@ using Rebus.Time;
 using Rebus.Topic;
 using Rebus.Transport;
 using Rebus.Workers;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 // ReSharper disable ArgumentsStyleLiteral
 
 namespace Rebus.Bus
@@ -32,7 +30,6 @@ namespace Rebus.Bus
 
         readonly Lazy<IWorkersCoordinator> _workers;
         readonly BusLifetimeEvents _busLifetimeEvents;
-        readonly IDataBus _dataBus;
         readonly IWorkersCoordinatorFactory _workerFactory;
         readonly IRouter _router;
         readonly ITransport _transport;
@@ -46,7 +43,7 @@ namespace Rebus.Bus
         /// <summary>
         /// Constructs the bus.
         /// </summary>
-        public RebusBus(IWorkersCoordinatorFactory workerFactory, IRouter router, ITransport transport, IPipelineInvoker pipelineInvoker, ISubscriptionStorage subscriptionStorage, Options options, IRebusLoggerFactory rebusLoggerFactory, BusLifetimeEvents busLifetimeEvents, IDataBus dataBus, ITopicNameConvention topicNameConvention)
+        public RebusBus(IWorkersCoordinatorFactory workerFactory, IRouter router, ITransport transport, IPipelineInvoker pipelineInvoker, ISubscriptionStorage subscriptionStorage, Options options, IRebusLoggerFactory rebusLoggerFactory, BusLifetimeEvents busLifetimeEvents, ITopicNameConvention topicNameConvention)
         {
             _workerFactory = workerFactory;
             _router = router;
@@ -55,7 +52,6 @@ namespace Rebus.Bus
             _subscriptionStorage = subscriptionStorage;
             _options = options;
             _busLifetimeEvents = busLifetimeEvents;
-            _dataBus = dataBus;
             _log = rebusLoggerFactory.GetLogger<RebusBus>();
             _topicNameConvention = topicNameConvention;
             

@@ -19,7 +19,7 @@ namespace Rebus.TasksCoordinator
 
         public IDisposable Enter(CancellationToken cancellationToken)
         {
-            _semaphore.Wait(cancellationToken);
+            _semaphore.Wait(100, cancellationToken);
 
             return new Releaser(_semaphore);
         }
