@@ -97,7 +97,7 @@ namespace Rebus.Threading.TaskParallelLibrary
                 {
                     _finished.Set();
                 }
-            }, token);
+            });
         }
 
         /// <summary>
