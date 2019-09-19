@@ -27,9 +27,9 @@ namespace Rebus.Transports.Showdown
             {
                  inMemNetwork = new InMemNetwork();
             }
-
-            await _SendMessages(transportKind, messageCount);
-            await _ReceiveMessages(transportKind, busCount, readParallelism, numberOfWorkers, messageCount, isLongRun);
+            var t1 = Task.Run(() => _SendMessages(transportKind, messageCount));
+            var t2 = Task.Run(() => _ReceiveMessages(transportKind, busCount, readParallelism, numberOfWorkers, messageCount, isLongRun));
+            await Task.WhenAll(t1, t2);
         }
 
         static async Task _SendMessages(TransportKind transportKind, int messageCount)

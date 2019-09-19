@@ -1,13 +1,15 @@
-﻿using Rebus.Time;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
-using System.Threading;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Rebus.Transport.FileSystem
 {
     class TransportHelper
     {
+        public static readonly Encoding FavoriteEncoding = Encoding.UTF8;
+
         private static readonly DateTime historicalDate = new DateTime(1970, 1, 1, 0, 0, 0);
         private const int PART1_LENGH = 19 + 5;
 
@@ -146,6 +148,54 @@ namespace Rebus.Transport.FileSystem
 
             throw new InvalidOperationException(
                 $"Cannot use '{queueName}' as an input queue name because it contains the following invalid characters: {string.Join(", ", invalidPathCharactersPresentsInQueueName.Select(c => $"'{c}'"))}");
+        }
+
+        private static async Task<string> _ReadAllText(string fullPath)
+        {
+            using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 8, true))
+            using (var reader = new StreamReader(stream, FavoriteEncoding, false, 1024 * 8, false))
+            {
+                return await reader.ReadToEndAsync();
+            }
+        }
+
+        public static async Task DeleteFile(string fullPath)
+        {
+            int cnt = 0;
+            while (true)
+            {
+                try
+                {
+                    File.Delete(fullPath);
+                    return;
+                }
+                catch (Exception)
+                {
+                    ++cnt;
+                    if (cnt > 2)
+                        throw;
+                    await Task.Delay(10);
+                }
+            }
+        }
+
+        public static async Task<string> ReadAllText(string fullPath)
+        {
+            int cnt = 0;
+            while (true)
+            {
+                try
+                {
+                    return await _ReadAllText(fullPath);
+                }
+                catch (Exception)
+                {
+                    ++cnt;
+                    if (cnt > 2)
+                        throw;
+                    await Task.Delay(10);
+                }
+            }
         }
     }
 }

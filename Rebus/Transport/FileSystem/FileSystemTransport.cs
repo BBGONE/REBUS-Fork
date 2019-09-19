@@ -19,7 +19,7 @@ namespace Rebus.Transport.FileSystem
     public class FileSystemTransport : ITransport, IInitializable, ITransportInspector
     {
         static readonly JsonSerializerSettings SuperSecretSerializerSettings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None };
-        static readonly Encoding FavoriteEncoding = Encoding.UTF8;
+       
    
         readonly string _inputQueue;
         readonly FileNameGenerator _fileNameGenerator;
@@ -28,7 +28,7 @@ namespace Rebus.Transport.FileSystem
 
         /// <summary>
         /// Constructs the file system transport to create "queues" as subdirectories of the specified base directory.
-        /// While it is apparent that <seealso cref="_baseDirectory"/> must be a valid directory name, please note that 
+        /// While it is apparent that <seealso cref="baseDirectory"/> must be a valid directory name, please note that 
         /// <seealso cref="_inputQueue"/> must not contain any invalid path either.
         /// </summary>
         public FileSystemTransport(string baseDirectory, string inputQueue)
@@ -79,7 +79,7 @@ namespace Rebus.Transport.FileSystem
                 // write the file with the temporary name prefix (so it could not be read while it is written)
                 using (var stream = new FileStream(tempFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 8, true))
                 {
-                    var bytes = FavoriteEncoding.GetBytes(serializedMessage);
+                    var bytes = TransportHelper.FavoriteEncoding.GetBytes(serializedMessage);
                     await stream.WriteAsync(bytes, 0, bytes.Length);
                 }
                 
@@ -133,7 +133,7 @@ namespace Rebus.Transport.FileSystem
                 fullPath = _fileQueue.Dequeue(cancellationToken);
                 if (!string.IsNullOrEmpty(fullPath))
                 {
-                    var jsonText = await ReadAllText(fullPath);
+                    var jsonText = await TransportHelper.ReadAllText(fullPath);
                     receivedTransportMessage = Deserialize(jsonText);
                     if (!_CheckIsValid(fullPath, receivedTransportMessage))
                     {
@@ -147,23 +147,13 @@ namespace Rebus.Transport.FileSystem
             if (receivedTransportMessage != null)
             {
                 context.OnCompleted(async () => {
-                    File.Delete(fullPath);
+                    await TransportHelper.DeleteFile(fullPath);
                 });
                 context.OnAborted(async () => {
                     TransportHelper.RenameToError(fullPath, out var _);
                 });
             }
             return receivedTransportMessage;
-        }
-
-        static async Task<string> ReadAllText(string fullPath)
-        {
-            using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.None, 1024 * 8, true))
-            using (var reader = new StreamReader(stream, FavoriteEncoding, false, 1024 * 8, true))
-            {
-                return await reader.ReadToEndAsync();
-                
-            }
         }
 
         /// <summary>

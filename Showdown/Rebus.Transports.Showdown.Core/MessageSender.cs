@@ -38,7 +38,7 @@ namespace Rebus.Transports.Showdown
 
                 var range = Enumerable.Range(0, messageCount);
 
-                sentMessagesCount =  await SendRangeWithPartitioning(range, messageCount, partionCount: 10);
+                sentMessagesCount =  await SendRangeWithPartitioning(range, messageCount, partionCount: 2);
                 // sentMessagesCount = await SendRangeWithLinqSelect(range);
 
                 senderWatch.Stop();
@@ -116,7 +116,7 @@ namespace Rebus.Transports.Showdown
                     ++cnt;
                     var message = new TestMessage { MessageId = num + (partion.Key * partionSize) };
                     await senderBus.SendLocal(message);
-                    if (cnt % 500 == 0) await Task.Yield();
+                    if (cnt % 5 == 0) await Task.Yield();
 
                     /*
                     Random rand = new Random(Guid.NewGuid().GetHashCode());
